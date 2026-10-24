@@ -13,7 +13,7 @@ import { DEFAULT_LOOSE, DEFAULT_RIGID } from '../fonts';
 export type Op =
   | { t: 'rect'; x: number; y: number; w: number; h: number; fill: string; opacity?: number }
   | { t: 'shade'; x: number; y: number; w: number; h: number }
-  | { t: 'image'; x: number; y: number; w: number; h: number; asset: Asset }
+  | { t: 'image'; x: number; y: number; w: number; h: number; asset: Asset; /** recorte da imagem de origem, em frações (0–1) */ crop?: { x: number; y: number; w: number; h: number } }
   | { t: 'text'; x: number; y: number; w: number; lines: string[]; raw: string; size: number; lh: number; font: string; weight: number; italic?: boolean; color: string; upper?: boolean; opacity?: number; mono?: boolean };
 
 export interface PageLayout {

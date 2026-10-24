@@ -101,10 +101,10 @@ function Guide({ view }: { view: ViewId }) {
           <>
             <p>Traga uma identidade que já existe, em qualquer formato. O IDEÁRIO lê as páginas, mede pela receita e mostra o que melhorar em composição e direção visual.</p>
             <ol className="guide-list">
-              <li>Importe o arquivo e leia o diagnóstico de cada página.</li>
+              <li>Importe o arquivo: o IDEÁRIO já monta sete modelos novos em cima do que veio, sem perguntas.</li>
               <li>Use a paleta detectada como paleta do projeto, se ela for a da marca.</li>
-              <li>Envie cada página para o módulo certo e reconstrua nele, em 4:5, com até 40 palavras.</li>
-              <li>Peça a análise de direção visual com IA para um olhar de diretor de arte.</li>
+              <li>Mande o modelo que funcionar para o módulo dele, ou peça outra rodada.</li>
+              <li>Baixe em PNG, PDF ou o pacote para o Canva; o diagnóstico de cada página fica logo abaixo.</li>
             </ol>
           </>
         ) : (

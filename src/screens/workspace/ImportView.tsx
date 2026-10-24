@@ -7,7 +7,10 @@ import { Icon } from '../../components/Icon';
 import { importFiles, reviewWithAi, type ImportProgress } from '../../lib/importFlow';
 import { ACCEPT_HINT } from '../../lib/importers';
 import { takeImport } from '../../lib/pendingImport';
-import { readableOn, uid } from '../../lib/util';
+import { readableOn, slug, uid } from '../../lib/util';
+import { aiDirection, buildModels, type Model } from '../../lib/generate';
+import { canvasBlob, toCanvas, toPdf, toPptx } from '../../lib/export/render';
+import { offerDownload } from '../../lib/claude';
 import type { ViewId } from '../Workspace';
 
 const KIND_LABEL: Record<ImportRecord['kind'], string> = {
@@ -68,10 +71,10 @@ export function ImportView({ project: p, onGo, onAi }: { project: Project; onGo:
       <header className="view-head">
         <span className="eyebrow">Estúdio</span>
         <h1 className="view-title">
-          Material <em>pronto</em>
+          Do moodboard a <em>modelos novos</em>
         </h1>
         <p className="view-lede">
-          Traga uma identidade visual que já existe, em qualquer formato. O IDEÁRIO separa as páginas, as cores, as fontes e os textos, mede tudo pela receita e aponta o que melhorar em composição e direção visual.
+          Envie um moodboard ou uma identidade pronta, em qualquer formato. O IDEÁRIO usa só o que veio no arquivo (imagens, cores, textos e fontes) e monta na hora páginas novas e melhoradas pela receita.
         </p>
       </header>
 
@@ -234,6 +237,8 @@ function ImportCard({ project: p, rec, onGo, onAi }: { project: Project; rec: Im
           </button>
         )}
       </header>
+
+      <ModelsPanel project={p} rec={rec} onGo={onGo} />
 
       {rec.note && (
         <p className="imp-note">
@@ -443,5 +448,162 @@ function AiResult({ ai, onDistribute, onRedo, busy }: { ai: AiReview; onDistribu
         </button>
       </div>
     </div>
+  );
+}
+
+/* ---------------- modelos novos ---------------- */
+
+const aiTried = new Set<string>();
+
+function ModelsPanel({ project: p, rec, onGo }: { project: Project; rec: ImportRecord; onGo: (v: ViewId) => void }) {
+  const { update, addBlobs } = useProjects();
+  const [models, setModels] = useState<Model[] | null>(null);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const gen = rec.gen ?? { seed: 0 };
+  const sig = JSON.stringify(gen) + p.assets.length + (p.modules.M06.extra.rigid ?? '') + (p.modules.M06.extra.loose ?? '');
+
+  const setGen = (fn: (g: NonNullable<ImportRecord['gen']>) => void) =>
+    update(p.id, (x) => {
+      const r = x.imports?.find((y) => y.id === rec.id);
+      if (!r) return;
+      r.gen = r.gen ?? { seed: 0 };
+      fn(r.gen);
+    });
+
+  // gera na hora, sem perguntas
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const ms = await buildModels(p, rec, gen);
+        if (!alive) return;
+        setModels(ms);
+        const th: Record<string, string> = {};
+        for (const m of ms) {
+          const cv = await toCanvas(m.layout, 0.34);
+          th[m.key] = cv.toDataURL('image/jpeg', 0.86);
+          if (!alive) return;
+          setThumbs({ ...th });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig, rec.id]);
+
+  // com IA disponível, afina textos e cor-dona uma vez, sozinho
+  useEffect(() => {
+    if (rec.gen?.aiAt || aiTried.has(rec.id) || (!rec.texts.length && !rec.palette.length)) return;
+    aiTried.add(rec.id);
+    setAiBusy(true);
+    aiDirection(p, rec)
+      .then((d) => {
+        if (d && (d.copy?.length || d.dona))
+          setGen((g) => {
+            g.copy = d.copy;
+            g.dona = d.dona;
+            g.aiAt = Date.now();
+          });
+      })
+      .catch(() => {})
+      .finally(() => setAiBusy(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rec.id]);
+
+  const fullBlob = async (m: Model) => canvasBlob(await toCanvas(m.layout, 1), 'image/png');
+  const name = slug(p.title || rec.fileName);
+
+  const run = async (id: string, fn: () => Promise<string>) => {
+    if (busy) return;
+    setBusy(id);
+    setMsg(null);
+    try {
+      setMsg({ ok: true, text: await fn() });
+    } catch (e: any) {
+      console.error(e);
+      setMsg({ ok: false, text: e?.code === 'declined' ? 'Download cancelado.' : 'Não deu certo agora. Tente de novo.' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toModule = (m: Model) =>
+    run('mod-' + m.key, async () => {
+      const [a] = await addBlobs(p.id, [{ blob: await fullBlob(m), name: `${m.name} · ${rec.fileName}`, type: 'image/png', tags: ['modelo', 'importado'] }]);
+      update(p.id, (x) => sendToModule(x, m.module, a.id));
+      return `“${m.name}” foi para o módulo ${MODULE_BY_ID[m.module].n}.`;
+    });
+
+  const all = models ?? [];
+  return (
+    <section className="gen" aria-label="Modelos novos">
+      <div className="gen-head">
+        <div>
+          <span className="eyebrow">modelos novos · a partir deste material</span>
+          <p className="gen-sub">
+            {rec.pages.length} {rec.pages.length === 1 ? 'imagem' : 'imagens'}, {Math.min(rec.palette.length, 8)} cores e {rec.texts.length} {rec.texts.length === 1 ? 'texto' : 'textos'} do arquivo, reorganizados pela receita.
+            {aiBusy ? ' A IA está afinando textos e cor-dona…' : rec.gen?.aiAt ? ' Textos e cor-dona afinados pela IA.' : ''}
+          </p>
+        </div>
+        <div className="gen-actions">
+          <button className="btn btn-sm btn-ghost" onClick={() => setGen((g) => (g.seed = (g.seed ?? 0) + 1))} disabled={!models}>
+            <Icon name="rotate" size={14} /> Outra rodada
+          </button>
+          <button
+            className="btn btn-sm btn-dark"
+            disabled={!models || !!busy}
+            onClick={() => run('pdf', async () => (await offerDownload(`${name}-modelos.pdf`, await toPdf(all.map((m) => m.layout))), 'PDF com os modelos pronto.'))}
+          >
+            <Icon name={busy === 'pdf' ? 'rotate' : 'download'} size={14} /> PDF
+          </button>
+          <button
+            className="btn btn-sm btn-sun"
+            disabled={!models || !!busy}
+            onClick={() => run('pptx', async () => (await offerDownload(`${name}-modelos-canva.pptx`, await toPptx(p, all.map((m) => m.layout))), 'PPTX pronto: no Canva, Criar design › Importar arquivo.'))}
+          >
+            <Icon name={busy === 'pptx' ? 'rotate' : 'download'} size={14} /> Para o Canva
+          </button>
+        </div>
+      </div>
+
+      <ul className="gen-grid">
+        {(models ?? Array.from({ length: 7 }, (_, i) => ({ key: 'sk' + i }) as Model)).map((m) => (
+          <li key={m.key} className="gen-item">
+            <div className="gen-thumb">{thumbs[m.key] ? <img src={thumbs[m.key]} alt={m.name} /> : <span className="gen-wait" aria-hidden="true" />}</div>
+            {m.name && (
+              <>
+                <b className="gen-name">{m.name}</b>
+                <span className="gen-why">{m.why}</span>
+                <div className="gen-row">
+                  <button className="btn btn-sm btn-ghost" disabled={!!busy} onClick={() => run('png-' + m.key, async () => (await offerDownload(`${name}-${m.key}.png`, await fullBlob(m)), `${m.name}: PNG 1080 × 1350 pronto.`))}>
+                    <Icon name={busy === 'png-' + m.key ? 'rotate' : 'download'} size={13} /> PNG
+                  </button>
+                  <button className="btn btn-sm btn-ghost" disabled={!!busy} onClick={() => toModule(m)}>
+                    <Icon name={busy === 'mod-' + m.key ? 'rotate' : 'send'} size={13} /> Módulo {MODULE_BY_ID[m.module].n}
+                  </button>
+                </div>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      {msg && (
+        <p className={'gen-msg ' + (msg.ok ? 'ok' : 'err')} role="status">
+          <Icon name={msg.ok ? 'check' : 'warn'} size={14} /> {msg.text}{' '}
+          {msg.ok && /módulo/.test(msg.text) && (
+            <button className="link-btn" onClick={() => onGo(all.find((m) => msg.text.includes(m.name))?.module ?? 'map')}>
+              abrir
+            </button>
+          )}
+        </p>
+      )}
+    </section>
   );
 }

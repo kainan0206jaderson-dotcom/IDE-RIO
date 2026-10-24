@@ -31,19 +31,22 @@ function loadImage(a: Asset) {
 
 const dataCache = new Map<string, Promise<string | null>>();
 /** Imagem como data URI JPEG/PNG reduzida ao tamanho de uso (para SVG, PPTX e HTML). */
-function imageData(a: Asset, maxW: number) {
-  const key = a.ref + ':' + maxW;
+type Crop = { x: number; y: number; w: number; h: number };
+function imageData(a: Asset, maxW: number, crop?: Crop) {
+  const key = a.ref + ':' + maxW + (crop ? `:${crop.x},${crop.y},${crop.w},${crop.h}` : '');
   if (!dataCache.has(key))
     dataCache.set(
       key,
       (async () => {
         const img = await loadImage(a);
         if (!img) return null;
-        const s = Math.min(1, maxW / img.naturalWidth);
+        const c = crop ?? { x: 0, y: 0, w: 1, h: 1 };
+        const sx = c.x * img.naturalWidth, sy = c.y * img.naturalHeight, sw = c.w * img.naturalWidth, sh = c.h * img.naturalHeight;
+        const s = Math.min(1, maxW / sw);
         const cv = document.createElement('canvas');
-        cv.width = Math.max(1, Math.round(img.naturalWidth * s));
-        cv.height = Math.max(1, Math.round(img.naturalHeight * s));
-        cv.getContext('2d')!.drawImage(img, 0, 0, cv.width, cv.height);
+        cv.width = Math.max(1, Math.round(sw * s));
+        cv.height = Math.max(1, Math.round(sh * s));
+        cv.getContext('2d')!.drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
         return a.type === 'image/png' ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.9);
       })(),
     );
@@ -58,6 +61,8 @@ export async function prepareFonts(p: Project) {
 /* ---------- canvas ---------- */
 
 const baseline = (op: Extract<Op, { t: 'text' }>, i: number) => op.y + i * op.size * op.lh + op.size * 0.82;
+
+export { loadImage };
 
 export async function toCanvas(l: PageLayout, scale = 1): Promise<HTMLCanvasElement> {
   const cv = document.createElement('canvas');
@@ -80,9 +85,11 @@ export async function toCanvas(l: PageLayout, scale = 1): Promise<HTMLCanvasElem
     } else if (op.t === 'image') {
       const img = await loadImage(op.asset);
       if (img) {
-        const r = Math.max(op.w / img.naturalWidth, op.h / img.naturalHeight);
+        const k = op.crop ?? { x: 0, y: 0, w: 1, h: 1 };
+        const bw = k.w * img.naturalWidth, bh = k.h * img.naturalHeight;
+        const r = Math.max(op.w / bw, op.h / bh);
         const sw = op.w / r, sh = op.h / r;
-        c.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, op.x, op.y, op.w, op.h);
+        c.drawImage(img, k.x * img.naturalWidth + (bw - sw) / 2, k.y * img.naturalHeight + (bh - sh) / 2, sw, sh, op.x, op.y, op.w, op.h);
       } else {
         c.fillStyle = '#DCD7CE';
         c.fillRect(op.x, op.y, op.w, op.h);
@@ -119,7 +126,7 @@ export async function toSvg(l: PageLayout): Promise<string> {
       defs.push(`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".62"/></linearGradient>`);
       parts.push(`<rect x="${op.x}" y="${op.y.toFixed(1)}" width="${op.w}" height="${op.h.toFixed(1)}" fill="url(#${id})"/>`);
     } else if (op.t === 'image') {
-      const d = await imageData(op.asset, Math.round(op.w * 1.5));
+      const d = await imageData(op.asset, Math.round(op.w * 1.5), op.crop);
       if (d) parts.push(`<image x="${op.x.toFixed(1)}" y="${op.y.toFixed(1)}" width="${op.w.toFixed(1)}" height="${op.h.toFixed(1)}" preserveAspectRatio="xMidYMid slice" href="${d}"/>`);
     } else {
       fams.add(op.font);
@@ -179,7 +186,7 @@ export async function toPptx(p: Project, layouts: PageLayout[], onStep?: (i: num
       } else if (op.t === 'shade') {
         s.addShape('rect', { x: op.x * k, y: (op.y + op.h * 0.35) * k, w: op.w * k, h: op.h * 0.65 * k, fill: { color: '000000', transparency: 55 }, line: { type: 'none' } });
       } else if (op.t === 'image') {
-        const d = await imageData(op.asset, Math.round(op.w * 1.5));
+        const d = await imageData(op.asset, Math.round(op.w * 1.5), op.crop);
         if (d) s.addImage({ data: d, x: op.x * k, y: op.y * k, w: op.w * k, h: op.h * k, sizing: { type: 'cover', w: op.w * k, h: op.h * k } });
       } else {
         const h = op.lines.length * op.size * op.lh + op.size * 0.3;

@@ -145,4 +145,6 @@ export interface ImportRecord {
   fonts: string[];
   note?: string;
   ai?: AiReview;
+  /** modelos novos gerados a partir do material: rodada e direção (IA opcional) */
+  gen?: { seed: number; dona?: string; copy?: { titulo: string; linha: string }[]; aiAt?: number };
 }
