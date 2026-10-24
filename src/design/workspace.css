@@ -769,3 +769,192 @@
   .exp-grid { grid-template-columns: 1fr; }
   .exp-row .exp-btn { flex: 1 1 calc(50% - 8px); }
 }
+
+/* =====================================================================
+   FOLHA DE SKETCHBOOK — a aba de criação
+   Papel quente (nunca branco puro), pontilhado leve, furos da espiral no topo.
+   Toda a escrita da interface vira mão: caneta (títulos), lapiseira (texto e campos),
+   lápis (anotações e rótulos). As páginas do brandbook e as capas mantêm as fontes da marca.
+   ===================================================================== */
+.ws {
+  --font-display: var(--font-pen);
+  --font-serif: var(--font-pen);
+  --font-body: var(--font-lead);
+  --font-mono: var(--font-pencil);
+  --surface-page: var(--sheet);
+  --surface-sunken: var(--sheet-deep);
+  --surface-raised: var(--sheet-card);
+  --surface-paper: var(--sheet-card);
+  --border-default: var(--sheet-edge);
+  --border-subtle: var(--sheet-line);
+  --shadow-paper: 0 1px 0 var(--sheet-line), 0 10px 22px -16px rgba(32,30,31,.35);
+  font-family: var(--font-lead);
+  color: var(--ink-pen);
+  background: var(--sheet);
+}
+/* o que é da marca continua na fonte da marca */
+.ws .page, .ws .sb, .ws .mono-in, .ws input[type='color'], .ws .imp-chip, .ws .pp-codes {
+  --font-display: var(--font-ui-display);
+  --font-serif: var(--font-ui-serif);
+  --font-body: var(--font-ui-body);
+  --font-mono: var(--font-ui-mono);
+}
+.ws .page { font-family: var(--font-ui-body); }
+
+/* papel */
+.ws-main {
+  position: relative;
+  background-color: var(--sheet);
+  background-image: radial-gradient(var(--sheet-line) 1.1px, transparent 1.5px);
+  background-size: 22px 22px;
+  background-position: 11px 30px;
+}
+.ws-body::before {
+  /* furos da espiral */
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 12px; z-index: 3; pointer-events: none;
+  background: radial-gradient(circle at 50% 30%, var(--c-dark) 0 3.2px, transparent 3.8px) 0 0 / 22px 12px repeat-x;
+  opacity: .85;
+}
+
+/* topo: capa do caderno, discreta */
+.ws-top { border-bottom: 0; min-height: 52px; }
+.ws-title-btn, .ws-title-input { font-family: var(--font-ui-display); }
+.ws-back, .ws-sub { font-family: var(--font-ui-mono); }
+.ws-top .btn { font-family: var(--font-ui-body); }
+
+/* índice lateral e painel: abas do caderno */
+.ws-rail { background: var(--sheet-deep); border-right: 1px dashed var(--sheet-edge); padding-top: 24px; }
+.ws-panel { background: var(--sheet-deep); border-left: 1px dashed var(--sheet-edge); }
+.rail-title { font-size: 15px; letter-spacing: 0; text-transform: none; color: var(--ink-graphite); }
+.rail-item { font-size: 17px; }
+.rail-n, .rail-meta { font-size: 14px; color: var(--ink-graphite); }
+.rail-opt { font-size: 12px; letter-spacing: 0; text-transform: none; }
+.rail-item.active { background: linear-gradient(transparent 12%, var(--marker) 12% 88%, transparent 88%); color: var(--ink-pen); }
+.rail-item.active .rail-n, .rail-item.active .rail-meta { color: var(--ink-pen); }
+
+/* escrita */
+.ws .eyebrow, .ws .mono { font-size: 15px; letter-spacing: 0; text-transform: none; color: var(--ink-graphite); }
+.ws .view-title {
+  font-weight: 700; font-stretch: 100%; text-transform: none; letter-spacing: 0;
+  font-size: clamp(44px, 6vw, 68px); line-height: .95;
+}
+.ws .view-title em { font-family: var(--font-pen); font-style: normal; font-weight: 400; color: var(--ink-violet); text-decoration: underline wavy var(--sheet-rule); text-underline-offset: 8px; }
+.ws .view-lede { font-size: 18px; color: var(--ink-graphite); line-height: 1.6; }
+.ws h2, .ws h3 { font-family: var(--font-pen); font-weight: 700; letter-spacing: 0; text-transform: none; }
+.ws .field > span { font-family: var(--font-pencil); font-size: 16px; letter-spacing: 0; text-transform: none; color: var(--ink-graphite); }
+
+/* campos como escrita na folha: linha de base, sem caixa */
+.ws .field input:not([type='range']):not([type='checkbox']):not([type='color']),
+.ws .field select, .ws .input, .ws .field textarea, .ws textarea.input {
+  background: transparent; border: 0; border-bottom: 1.5px solid var(--sheet-edge); border-radius: 0;
+  padding-left: 2px; padding-right: 2px; font-family: var(--font-lead); font-size: 17px; color: var(--ink-pen);
+}
+.ws .field textarea, .ws textarea.input {
+  line-height: 32px; padding-top: 0; border-bottom: 0;
+  background-image: linear-gradient(transparent 31px, var(--sheet-rule) 31px);
+  background-size: 100% 32px; background-attachment: local;
+}
+.ws .field input:focus, .ws .field select:focus, .ws .input:focus, .ws .field textarea:focus { outline: none; border-bottom-color: var(--c-violet); box-shadow: 0 1.5px 0 var(--c-violet); }
+.ws ::placeholder { color: var(--ink-graphite); opacity: .5; font-family: var(--font-pencil); }
+
+/* botões: traço de caneta, sem peso de SaaS */
+.ws .btn { font-family: var(--font-lead); font-weight: 700; font-size: 15px; letter-spacing: 0; }
+.ws .btn-ghost { border-style: dashed; }
+.ws .tag-chip { font-family: var(--font-lead); }
+
+/* menos ruído: cartões como papéis colados */
+.ws .imp-card, .ws .exp-btn { box-shadow: none; }
+.ws .exp-canva-text h2 { font-family: var(--font-pen); font-size: 40px; text-transform: none; }
+
+/* guarda do sketchbook (folhear) */
+.endpaper {
+  position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; gap: 2.4cqw;
+  padding: 10cqw; text-align: center; container-type: inline-size;
+  background-color: var(--sheet);
+  background-image: radial-gradient(var(--sheet-line) 1px, transparent 1.4px);
+  background-size: 5cqw 5cqw;
+  color: var(--ink-pen);
+}
+.ep-note { font-family: var(--font-pencil); font-size: max(11px, 4.6cqw); color: var(--ink-graphite); line-height: 1.2; }
+.ep-title { font-family: var(--font-pen); font-weight: 700; font-size: max(20px, 12cqw); line-height: 1; overflow-wrap: anywhere; }
+.ep-big { font-family: var(--font-pen); font-weight: 700; font-size: max(28px, 30cqw); line-height: 1; }
+.ep-line { width: 40%; height: 2px; background: var(--ink-graphite); opacity: .35; border-radius: 2px; }
+.fb .endpaper { container-type: inline-size; }
+.fb-page-inner, .fb-face { container-type: inline-size; }
+
+/* modal de novo sketchbook como folha */
+.sheet-modal { background: var(--sheet); font-family: var(--font-lead); }
+.sheet-modal .modal-title { font-family: var(--font-pen); text-transform: none; font-stretch: 100%; font-weight: 700; font-size: 42px; }
+.sheet-modal .modal-title em { font-family: var(--font-pen); font-style: normal; color: var(--ink-violet); }
+.sheet-modal .field > span, .sheet-modal .eyebrow { font-family: var(--font-pencil); font-size: 16px; letter-spacing: 0; text-transform: none; color: var(--ink-graphite); }
+.sheet-modal .field input { background: transparent; border: 0; border-bottom: 1.5px solid var(--sheet-edge); border-radius: 0; font-family: var(--font-lead); font-size: 18px; }
+.sheet-modal .btn { font-family: var(--font-lead); }
+
+/* letras à mão têm olho pequeno: normaliza a altura-x para manter a leitura dos textos miúdos */
+.ws { font-size-adjust: 0.5; }
+.ws .view-title, .ws h2, .ws h3, .ws .ep-title, .ws .ep-big { font-size-adjust: none; }
+.ws .page, .ws .sb, .ws-top { font-size-adjust: none; }
+/* a capa do caderno (topo) usa a voz da interface */
+.ws-top {
+  --font-display: var(--font-ui-display);
+  --font-serif: var(--font-ui-serif);
+  --font-body: var(--font-ui-body);
+  --font-mono: var(--font-ui-mono);
+  font-family: var(--font-ui-body);
+}
+
+/* ===== Folha noturna: papel amarelado de livro sob a luminária ===== */
+.ws[data-sheet='night'] {
+  --sheet: var(--sheet-night);
+  --sheet-deep: var(--sheet-night-deep);
+  --sheet-card: var(--sheet-night-card);
+  --sheet-line: var(--sheet-night-line);
+  --sheet-edge: var(--sheet-night-edge);
+  --ink-pen: var(--ink-night);
+  --ink-graphite: var(--graphite-night);
+  --text-primary: var(--ink-night);
+  --text-secondary: var(--graphite-night);
+  --text-muted: var(--graphite-night);
+  --c-paper: var(--sheet-night-card);
+  --state-hover: rgba(74, 52, 22, 0.08);
+}
+.ws[data-sheet='night'] .ws-main {
+  /* queda da luz da luminária nas bordas da folha */
+  box-shadow: inset 0 0 140px var(--lamp-shade);
+  background-image:
+    radial-gradient(70% 60% at 50% 18%, var(--lamp-glow), transparent 70%),
+    radial-gradient(var(--sheet-line) 1.1px, transparent 1.5px);
+  background-size: 100% 100%, 22px 22px;
+  background-attachment: local, local;
+}
+.ws[data-sheet='night'] .ws-top { background: var(--c-dark); }
+.ws[data-sheet='night'] .page { filter: sepia(.12) brightness(.97); }
+
+/* interruptor da luminária */
+.lamp-btn {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 12px 0 10px; border-radius: 999px;
+  border: 1px solid var(--border-inverse); background: transparent; color: var(--text-on-inverse);
+  font-size: 12px; transition: background .3s, color .3s, border-color .3s;
+}
+.lamp-btn:hover { border-color: var(--c-cloud); }
+.lamp-btn.on { background: var(--c-cloud); color: var(--c-dark); border-color: var(--c-cloud); box-shadow: 0 0 18px 2px var(--lamp-glow); }
+.lamp-btn svg { transition: transform .5s var(--ease-spring); }
+.lamp-btn:active svg { transform: translateY(2px); }
+.lamp-cord { position: absolute; left: 17px; top: -10px; width: 1px; height: 10px; background: var(--border-inverse); transition: height .25s var(--ease-spring); }
+.lamp-btn:active .lamp-cord { height: 16px; }
+@media (max-width: 640px) { .lamp-label { display: none; } .lamp-btn { padding: 0 9px; } }
+
+/* a transição: a luz nova se espalha do interruptor como o halo de uma luminária */
+@property --lamp-r { syntax: '<length>'; inherits: false; initial-value: 0px; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-old(root) { animation: lamp-dim .9s ease-in-out both; }
+::view-transition-new(root) {
+  -webkit-mask-image: radial-gradient(circle at var(--lamp-x, 90%) var(--lamp-y, 0px), #000 calc(var(--lamp-r) * .72), rgba(0,0,0,.6) calc(var(--lamp-r) * .86), transparent var(--lamp-r));
+  mask-image: radial-gradient(circle at var(--lamp-x, 90%) var(--lamp-y, 0px), #000 calc(var(--lamp-r) * .72), rgba(0,0,0,.6) calc(var(--lamp-r) * .86), transparent var(--lamp-r));
+  animation: lamp-spread 1.1s cubic-bezier(.5, 0, .2, 1) both;
+}
+@keyframes lamp-spread { from { --lamp-r: 0px; } to { --lamp-r: 260vmax; } }
+@keyframes lamp-dim { 50% { filter: brightness(.9); } }
+html[data-lamp='night']::view-transition-new(root) { animation-duration: 1.3s; }
+.ws { --c-violet-soft: color-mix(in srgb, var(--c-violet) 13%, var(--sheet)); --ai-soft: var(--c-violet-soft); --c-sun-soft: color-mix(in srgb, var(--c-sun) 45%, var(--sheet)); --c-orange-soft: color-mix(in srgb, var(--c-orange) 16%, var(--sheet)); }

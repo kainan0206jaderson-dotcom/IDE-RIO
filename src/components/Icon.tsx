@@ -20,6 +20,8 @@ const P: Record<string, string> = {
   device: 'M4 5h16v11H4zM9 20h6M12 16v4',
   warn: 'M12 4l9 16H3zM12 10v4M12 17h.01',
   dot: 'M12 12h.01',
+  lamp: 'M8 3h8l3 8H5zM12 11v7M8 21h8M12 18v3',
+  more: 'M6 12h.01M12 12h.01M18 12h.01',
   menu: 'M4 7h16M4 12h16M4 17h16',
   motion: 'M4 12h3l2-5 4 10 2-5h5',
   wand: 'M5 19L15 9M14 5l1-2 1 2 2 1-2 1-1 2-1-2-2-1zM19 12l.7 1.3L21 14l-1.3.7L19 16l-.7-1.3L17 14l1.3-.7z',

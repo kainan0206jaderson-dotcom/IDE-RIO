@@ -11,6 +11,14 @@ npm run dev      # desenvolvimento
 npm run build    # gera dist/
 ```
 
+## Interface (v0.3)
+
+- Abertura em primeira pessoa (three.js): a câmera passa pela porta do escritório e chega à mesa dos sketchbooks. Roda uma vez por sessão, tem “Pular” e respeita “reduzir movimento”.
+- Escritório minimalista: os sketchbooks num carrossel 3D (arrastar, setas, roda do mouse).
+- Folhear: o sketchbook abre em 3D, as páginas viram, e um toque abre a página escolhida para criar.
+- Aba de criação como folha de sketchbook em papel quente, com escrita à mão: caneta (Caveat), lapiseira (Kalam) e lápis (Shadows Into Light). As páginas do brandbook mantêm as fontes da marca.
+- Folha clara ou noturna (papel amarelado de livro). A troca acende a luminária: a luz nova se espalha a partir do interruptor.
+
 ## Importar material pronto
 
 No escritório (botão “Importar material pronto”) ou dentro de um sketchbook (Estúdio, “Importar material pronto”), aceita qualquer arquivo:

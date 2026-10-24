@@ -1,4 +1,5 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties, type MouseEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { useProjects } from '../store/useProjects';
 import { ACTS, MODULES, MODULE_BY_ID, type ModuleId } from '../data/recipe';
 import { Icon } from '../components/Icon';
@@ -31,6 +32,19 @@ export function StatusMark({ status }: { status: ModuleStatus }) {
   );
 }
 
+type Sheet = 'day' | 'night';
+const SHEET_KEY = 'ideario:sheet';
+
+function initialSheet(): Sheet {
+  try {
+    const v = localStorage.getItem(SHEET_KEY);
+    if (v === 'day' || v === 'night') return v;
+  } catch {
+    /* sem armazenamento: segue o sistema */
+  }
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'night' : 'day';
+}
+
 export function Workspace({ projectId, view, onView, onExit }: { projectId: string; view: ViewId; onView: (v: ViewId) => void; onExit: () => void }) {
   const { get, update } = useProjects();
   const p = get(projectId)!;
@@ -38,6 +52,26 @@ export function Workspace({ projectId, view, onView, onExit }: { projectId: stri
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<'guia' | 'ia'>('guia');
   const [editingTitle, setEditingTitle] = useState(false);
+  const [sheet, setSheet] = useState<Sheet>(initialSheet);
+
+  /** Acender ou apagar a luminária: a luz nova se espalha pela folha a partir do interruptor. */
+  const toggleSheet = (e: MouseEvent<HTMLButtonElement>) => {
+    const next: Sheet = sheet === 'day' ? 'night' : 'day';
+    try {
+      localStorage.setItem(SHEET_KEY, next);
+    } catch {
+      /* preferência só nesta visita */
+    }
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!doc.startViewTransition || reduced) return setSheet(next);
+    const r = e.currentTarget.getBoundingClientRect();
+    const root = document.documentElement;
+    root.style.setProperty('--lamp-x', `${r.left + r.width / 2}px`);
+    root.style.setProperty('--lamp-y', `${r.top + r.height / 2}px`);
+    root.dataset.lamp = next;
+    doc.startViewTransition(() => flushSync(() => setSheet(next)));
+  };
 
   useEffect(() => {
     setRailOpen(false);
@@ -82,7 +116,7 @@ export function Workspace({ projectId, view, onView, onExit }: { projectId: stri
   const idx = isModule(view) ? MODULES.findIndex((m) => m.id === view) : -1;
 
   return (
-    <div className="ws" style={{ '--project-accent': p.palette[0]?.hex ?? 'var(--c-dark)' } as CSSProperties}>
+    <div className="ws" data-sheet={sheet} style={{ '--project-accent': p.palette[0]?.hex ?? 'var(--c-dark)' } as CSSProperties}>
       <header className="ws-top">
         <button className="ws-back" onClick={onExit} aria-label="Voltar ao escritório">
           <Icon name="back" size={18} />
@@ -118,6 +152,17 @@ export function Workspace({ projectId, view, onView, onExit }: { projectId: stri
         </div>
         <div className="ws-top-right">
           <StorageBadge compact />
+          <button
+            className={'lamp-btn' + (sheet === 'night' ? ' on' : '')}
+            onClick={toggleSheet}
+            aria-pressed={sheet === 'night'}
+            aria-label={sheet === 'night' ? 'Folha noturna ligada. Voltar à folha clara' : 'Ligar a folha noturna'}
+            title={sheet === 'night' ? 'Folha clara' : 'Folha noturna'}
+          >
+            <span className="lamp-cord" aria-hidden="true" />
+            <Icon name="lamp" size={17} />
+            <span className="lamp-label">{sheet === 'night' ? 'noturna' : 'clara'}</span>
+          </button>
           <button className="btn btn-sm ws-ai-btn" onClick={openAi}>
             <Icon name="sparkle" size={15} /> <span className="ws-ai-label">Assistente</span>
           </button>

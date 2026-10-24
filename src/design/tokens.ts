@@ -116,11 +116,48 @@ export const tokens: Record<string, string> = {
   'wall': 'var(--c-cloud)',
   'wall-shade': '#E6E1D9',
 
+  /* palco do escritório (abertura e carrossel): Darkest Hour com um véu de Blue Violet */
+  'stage-top': '#2E2B3F',
+  'stage-bottom': 'var(--c-dark)',
+  'stage-glow': 'rgba(104, 91, 199, 0.28)',
+  'stage-line': 'rgba(243, 240, 235, 0.14)',
+
+  /* folha de sketchbook (aba de criação): papel quente, nunca branco puro */
+  'sheet': '#ECE6DB',
+  'sheet-deep': '#E3DCCF',
+  'sheet-card': '#F1EDE5',
+  'sheet-line': 'rgba(32, 30, 31, 0.07)',
+  'sheet-rule': 'rgba(104, 91, 199, 0.16)',
+  'marker': 'rgba(218, 255, 2, 0.55)',
+  'sheet-edge': 'rgba(32, 30, 31, 0.16)',
+  /* folha noturna: papel amarelado de livro, à luz da luminária */
+  'sheet-night': '#E4D5B0',
+  'sheet-night-deep': '#D8C79F',
+  'sheet-night-card': '#EADDBC',
+  'sheet-night-line': 'rgba(74, 52, 22, 0.10)',
+  'sheet-night-edge': 'rgba(74, 52, 22, 0.24)',
+  'ink-night': '#2B2116',
+  'graphite-night': '#5E4E3A',
+  'lamp-glow': 'rgba(255, 196, 92, 0.22)',
+  'lamp-shade': 'rgba(52, 34, 10, 0.32)',
+  'ink-pen': 'var(--c-dark)',
+  'ink-graphite': '#57524E',
+  'ink-violet': 'var(--c-violet-ink)',
+
   /* tipografia */
-  'font-display': "'Archivo', 'Arial Narrow', system-ui, sans-serif",
-  'font-body': "'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif",
-  'font-serif': "'Instrument Serif', 'Times New Roman', Georgia, serif",
-  'font-mono': "'DM Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace",
+  'font-ui-display': "'Archivo', 'Arial Narrow', system-ui, sans-serif",
+  'font-ui-body': "'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif",
+  'font-ui-serif': "'Instrument Serif', 'Times New Roman', Georgia, serif",
+  'font-ui-mono': "'DM Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace",
+  /* papéis tipográficos: na aba de criação viram escrita à mão (ver workspace.css) */
+  'font-display': 'var(--font-ui-display)',
+  'font-body': 'var(--font-ui-body)',
+  'font-serif': 'var(--font-ui-serif)',
+  'font-mono': 'var(--font-ui-mono)',
+  /* escrita à mão da aba de criação */
+  'font-pen': "'Caveat', 'Segoe Print', 'Bradley Hand', cursive",
+  'font-lead': "'Kalam', 'Segoe Print', 'Bradley Hand', cursive",
+  'font-pencil': "'Shadows Into Light', 'Segoe Print', 'Bradley Hand', cursive",
 
   /* forma e espaço */
   'radius-s': '4px',
@@ -131,6 +168,24 @@ export const tokens: Record<string, string> = {
   'ease-out': 'cubic-bezier(.2,.8,.2,1)',
   'ease-spring': 'cubic-bezier(.34,1.4,.5,1)',
 };
+
+/** Cores da sala 3D da abertura. Mesma família da interface: parede Cloud Dancer, mesa Darkest Hour, acentos pontuais. */
+export const scene = {
+  wall: p('cloudDancer'),
+  wallShade: '#D9D3C8',
+  floor: '#6B5A4C',
+  floorDark: '#4E4136',
+  desk: p('darkestHour'),
+  deskTop: '#2A2728',
+  metal: '#3A3738',
+  paper: '#ECE6DB',
+  light: '#FFF4E2',
+  sky: '#DCE3F0',
+  accentSun: p('sunGlare'),
+  accentOrange: p('exuberantOrange'),
+  accentViolet: p('blueViolet'),
+  fog: '#2E2B3F',
+} as const;
 
 export function applyTokens(root: HTMLElement = document.documentElement) {
   for (const [k, v] of Object.entries(tokens)) root.style.setProperty(`--${k}`, v);
