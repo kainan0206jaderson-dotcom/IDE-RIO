@@ -2,7 +2,7 @@ import { useEffect, type CSSProperties } from 'react';
 import { MODULE_BY_ID, type ModuleId } from '../data/recipe';
 import type { Project } from '../data/types';
 import { AssetImage } from './AssetImage';
-import { fontStack, loadFont } from '../lib/fonts';
+import { fontStack, loadFont, DEFAULT_RIGID, DEFAULT_LOOSE } from '../lib/fonts';
 import { hexToRgb, readableOn } from '../lib/util';
 
 /**
@@ -17,16 +17,18 @@ export function ModulePage({ project: p, id, small, crop }: { project: Project; 
   const dona = p.palette[0]?.hex;
   const rigid = p.modules.M06.extra.rigid;
   const loose = p.modules.M06.extra.loose;
+  const rigidF = rigid || DEFAULT_RIGID;
+  const looseF = loose || DEFAULT_LOOSE;
   useEffect(() => {
-    loadFont(rigid);
-    loadFont(loose);
-  }, [rigid, loose]);
+    loadFont(rigidF);
+    loadFont(looseF);
+  }, [rigidF, looseF]);
 
   const style = {
     '--pg-bg': id === 'M01' && dona ? dona : 'var(--c-paper)',
     '--pg-fg': id === 'M01' && dona ? readableOn(dona) : 'var(--c-dark)',
-    '--pg-rigid': fontStack(rigid, 'sans') ?? 'var(--font-display)',
-    '--pg-loose': fontStack(loose, 'serif') ?? 'var(--font-serif)',
+    '--pg-rigid': fontStack(rigidF, 'sans'),
+    '--pg-loose': fontStack(looseF, 'serif'),
   } as CSSProperties;
 
   const empty = !imgs.length && !texts.length && !(id === 'M07' && p.palette.length) && !(id === 'M14' && Object.values(st.extra).some(Boolean)) && !(id === 'M06' && (rigid || loose));

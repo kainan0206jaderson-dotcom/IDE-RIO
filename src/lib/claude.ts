@@ -56,7 +56,7 @@ export function getAi(): Promise<Ai | null> {
   return aiPromise;
 }
 
-export async function offerDownload(filename: string, data: string, type = 'application/json') {
+export async function offerDownload(filename: string, data: string | Blob, type = 'application/json') {
   const dl = await useCapability('downloads');
   if (dl) {
     await dl.save({ filename, data });
@@ -64,7 +64,7 @@ export async function offerDownload(filename: string, data: string, type = 'appl
   }
   // Fora do claude.ai: download comum do navegador.
   try {
-    const url = URL.createObjectURL(new Blob([data], { type }));
+    const url = URL.createObjectURL(typeof data === 'string' ? new Blob([data], { type }) : data);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;

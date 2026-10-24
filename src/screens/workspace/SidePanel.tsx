@@ -92,6 +92,34 @@ function Guide({ view }: { view: ViewId }) {
         </ol>
       </div>
     );
+  if (view === 'import' || view === 'export')
+    return (
+      <div className="guide">
+        <span className="eyebrow">Estúdio</span>
+        <h3 className="guide-title">{view === 'import' ? 'Material importado' : 'Exportar'}</h3>
+        {view === 'import' ? (
+          <>
+            <p>Traga uma identidade que já existe, em qualquer formato. O IDEÁRIO lê as páginas, mede pela receita e mostra o que melhorar em composição e direção visual.</p>
+            <ol className="guide-list">
+              <li>Importe o arquivo e leia o diagnóstico de cada página.</li>
+              <li>Use a paleta detectada como paleta do projeto, se ela for a da marca.</li>
+              <li>Envie cada página para o módulo certo e reconstrua nele, em 4:5, com até 40 palavras.</li>
+              <li>Peça a análise de direção visual com IA para um olhar de diretor de arte.</li>
+            </ol>
+          </>
+        ) : (
+          <>
+            <p>Leve o brandbook para fora: Behance, Canva, PowerPoint, Keynote, Figma, Illustrator ou impressão.</p>
+            <ol className="guide-list">
+              <li>Behance: PNG ou JPG no tamanho Behance, mais a capa 808 × 632.</li>
+              <li>Canva: o pacote traz um PPTX editável, PDF, PNGs e as cores.</li>
+              <li>Figma e Illustrator: SVG, com texto editável.</li>
+              <li>Paleta: ASE para Adobe, GPL para Inkscape e GIMP, CSS e JSON para código.</li>
+            </ol>
+          </>
+        )}
+      </div>
+    );
   if (view === 'cover' || view === 'library')
     return (
       <div className="guide">

@@ -11,6 +11,20 @@ npm run dev      # desenvolvimento
 npm run build    # gera dist/
 ```
 
+## Importar material pronto
+
+No escritório (botão “Importar material pronto”) ou dentro de um sketchbook (Estúdio, “Importar material pronto”), aceita qualquer arquivo:
+
+- PDF e AI compatível com PDF, PSD, PNG, JPG, WebP, GIF, SVG, vídeo (MP4, WebM, MOV), fontes (TTF, OTF, WOFF), textos.
+- PPTX: os slides são redesenhados com a composição original. DOCX, Keynote, Pages, Sketch, XD e ZIP: prévias e imagens internas, textos e fontes.
+- Formatos que o navegador não abre ficam registrados com a orientação de como exportar.
+
+Cada página recebe um diagnóstico pela receita (proporção 4:5, paleta, cor-dona, respiro, peso visual, contraste, resolução). A paleta pode virar a do projeto, cada página vai para um módulo, e a análise de direção visual com IA (no claude.ai) sugere ajustes e a distribuição nos módulos.
+
+## Exportar
+
+Em “Exportar e Canva”: pacote Canva (PPTX editável 1080 × 1350, PDF, PNGs, cores e fontes, com passo a passo), brandbook em PDF, PPTX, HTML e ZIPs de PNG, JPG, WebP ou SVG, página avulsa, capa do Behance 808 × 632, paletas (ASE, GPL, CSS, JSON, HEX, SVG) e textos (MD, TXT, CSV, JSON).
+
 ## Estrutura
 
 - `src/design/tokens.ts` — única fonte das cores (paleta oficial + tokens semânticos). Aplicadas em `:root` no boot.

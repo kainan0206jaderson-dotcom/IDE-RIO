@@ -7,6 +7,7 @@ import { progress } from '../lib/progress';
 import { fmtDate } from '../lib/util';
 import { offerDownload } from '../lib/claude';
 import type { Project } from '../data/types';
+import { queueImport } from '../lib/pendingImport';
 import type { ViewId } from './Workspace';
 import { StorageBadge } from '../components/StorageBadge';
 
@@ -29,6 +30,7 @@ export function Office({ onOpen }: { onOpen: (id: string, view?: ViewId) => void
   const [toast, setToast] = useState<string | null>(null);
   const deskRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const matRef = useRef<HTMLInputElement>(null);
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -86,6 +88,15 @@ export function Office({ onOpen }: { onOpen: (id: string, view?: ViewId) => void
     }
   };
 
+  // material pronto de qualquer formato: vira um sketchbook novo e abre na tela de importação
+  const onMaterial = (files: File[]) => {
+    if (!files.length) return;
+    const base = files[0].name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim().slice(0, 60) || 'Material importado';
+    const p = create(base, '');
+    queueImport(p.id, files);
+    open(p.id, 'import');
+  };
+
   return (
     <div className={'office' + (opening ? ' is-opening' : '')}>
       <header className="wall">
@@ -112,6 +123,10 @@ export function Office({ onOpen }: { onOpen: (id: string, view?: ViewId) => void
               <input id="office-search" type="search" placeholder="Buscar sketchbook" value={query} onChange={(e) => setQuery(e.target.value)} />
             </label>
             <StorageBadge />
+            <button className="btn btn-ghost" onClick={() => matRef.current?.click()}>
+              <Icon name="upload" size={16} /> Importar material pronto
+            </button>
+            <input ref={matRef} type="file" multiple hidden onChange={(e) => e.target.files && onMaterial([...e.target.files])} />
             <button className="btn btn-sun" onClick={() => setCreating(true)}>
               <Icon name="plus" size={16} /> Novo sketchbook
             </button>
@@ -240,6 +255,18 @@ export function Office({ onOpen }: { onOpen: (id: string, view?: ViewId) => void
               </button>
               <div className="book-tag plain">
                 <span className="book-meta">em branco, pronto para a ficha</span>
+              </div>
+            </li>
+
+            <li className="book-slot new-slot" style={{ '--tilt': '1.5deg' } as CSSProperties}>
+              <button className="book book-new import" onClick={() => matRef.current?.click()}>
+                <span className="book-new-label">
+                  <Icon name="layers" size={22} />
+                  Importar material pronto
+                </span>
+              </button>
+              <div className="book-tag plain">
+                <span className="book-meta">PDF, AI, PSD, PNG, PPTX, Figma exportado e outros, para melhorar</span>
               </div>
             </li>
 

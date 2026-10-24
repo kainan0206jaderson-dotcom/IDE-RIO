@@ -1,3 +1,5 @@
+import { palette } from '../design/tokens';
+
 export const uid = (prefix = '') =>
   prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -56,3 +58,20 @@ export function debounce<T extends (...a: any[]) => void>(fn: T, ms: number) {
 
 export const fmtDate = (ts: number) =>
   new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+
+/** Igual a readableOn, mas sem ler o DOM: usa a paleta oficial direto. */
+export function readableOnHex(bg: string): string {
+  const dark = palette.darkestHour.hex, light = palette.cloudDancer.hex;
+  return contrast(bg, dark) >= contrast(bg, light) ? dark : light;
+}
+
+export function slug(s: string) {
+  return (
+    s
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'ideario'
+  );
+}

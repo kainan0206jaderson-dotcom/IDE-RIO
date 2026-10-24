@@ -19,3 +19,37 @@ export function loadFont(family?: string) {
 
 export const fontStack = (family: string | undefined, fallback: 'sans' | 'serif') =>
   family ? `'${family}', ${fallback === 'sans' ? 'system-ui, sans-serif' : 'Georgia, serif'}` : undefined;
+
+/** Registra no navegador as fontes enviadas pelo usuário, para a tela e para as exportações. */
+const registered = new Set<string>();
+export async function registerFonts(fonts: { family: string; store: 'cloud' | 'local'; ref: string }[] = []) {
+  const { assetUrl } = await import('../store/storage');
+  await Promise.all(
+    fonts.map(async (f) => {
+      const key = f.family + f.ref;
+      if (registered.has(key)) return;
+      registered.add(key);
+      try {
+        const url = await assetUrl(f);
+        if (!url) return;
+        const face = new FontFace(f.family, `url(${url})`);
+        await face.load();
+        document.fonts.add(face);
+      } catch {
+        registered.delete(key);
+      }
+    }),
+  );
+}
+
+/** Garante que uma família esteja carregada antes de desenhar em canvas. */
+export async function ensureFont(family: string, weight = 400, italic = false) {
+  try {
+    await document.fonts.load(`${italic ? 'italic ' : ''}${weight} 40px "${family}"`);
+  } catch {
+    /* segue com a fonte de reserva */
+  }
+}
+
+export const DEFAULT_RIGID = 'Archivo Narrow';
+export const DEFAULT_LOOSE = 'Instrument Serif';

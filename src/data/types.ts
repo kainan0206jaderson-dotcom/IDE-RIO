@@ -85,6 +85,64 @@ export interface Project {
   modules: Record<ModuleId, ModuleState>;
   checklist: boolean[];
   assets: Asset[];
+  /** material pronto importado (arquivos de qualquer tipo) */
+  imports?: ImportRecord[];
+  /** fontes enviadas pelo usuário (TTF/OTF/WOFF) */
+  fonts?: ProjectFont[];
   /** histórico da conversa com o assistente (curto) */
   ai: { role: 'user' | 'assistant'; content: string }[];
+}
+
+export interface ProjectFont {
+  id: string;
+  family: string;
+  /** onde o arquivo da fonte mora (mesma lógica dos assets) */
+  store: 'cloud' | 'local';
+  ref: string;
+  type: string;
+}
+
+export type ImportKind = 'image' | 'svg' | 'pdf' | 'psd' | 'office' | 'archive' | 'video' | 'font' | 'text' | 'other';
+
+export interface Finding {
+  ok: boolean;
+  label: string;
+  detail: string;
+}
+
+export interface ImportedPage {
+  assetId: string;
+  w: number;
+  h: number;
+  palette: { hex: string; share: number }[];
+  findings: Finding[];
+  /** módulo para onde a página foi enviada */
+  sentTo?: string;
+}
+
+export interface AiReview {
+  nivel: string;
+  resumo: string;
+  composicao: string[];
+  hierarquia: string[];
+  cor: string[];
+  tipografia: string[];
+  modulos: { pagina: number; modulo: string; porque: string }[];
+  proximos: string[];
+  at: number;
+}
+
+export interface ImportRecord {
+  id: string;
+  fileName: string;
+  kind: ImportKind;
+  size: number;
+  createdAt: number;
+  pages: ImportedPage[];
+  /** paleta consolidada do arquivo */
+  palette: { hex: string; share: number }[];
+  texts: string[];
+  fonts: string[];
+  note?: string;
+  ai?: AiReview;
 }

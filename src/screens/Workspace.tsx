@@ -13,9 +13,12 @@ import { PreviewView } from './workspace/PreviewView';
 import { LibraryView } from './workspace/LibraryView';
 import { CoverEditor } from './workspace/CoverEditor';
 import { SidePanel } from './workspace/SidePanel';
+import { ImportView } from './workspace/ImportView';
+import { ExportView } from './workspace/ExportView';
+import { registerFonts } from '../lib/fonts';
 import type { ModuleStatus } from '../data/types';
 
-export type ViewId = 'map' | 'ficha' | 'checklist' | 'preview' | 'library' | 'cover' | ModuleId;
+export type ViewId = 'map' | 'ficha' | 'checklist' | 'preview' | 'library' | 'cover' | 'import' | 'export' | ModuleId;
 
 export const isModule = (v: string): v is ModuleId => /^M\d\d$/.test(v);
 
@@ -52,6 +55,10 @@ export function Workspace({ projectId, view, onView, onExit }: { projectId: stri
     return () => window.removeEventListener('keydown', k);
   }, []);
 
+  useEffect(() => {
+    if (p?.fonts?.length) registerFonts(p.fonts);
+  }, [p?.fonts]);
+
   if (!p) return null;
   const pr = progress(p);
   const go = (v: ViewId) => onView(v);
@@ -68,6 +75,8 @@ export function Workspace({ projectId, view, onView, onExit }: { projectId: stri
   else if (view === 'preview') body = <PreviewView project={p} onGo={go} />;
   else if (view === 'library') body = <LibraryView project={p} />;
   else if (view === 'cover') body = <CoverEditor project={p} />;
+  else if (view === 'import') body = <ImportView project={p} onGo={go} onAi={openAi} />;
+  else if (view === 'export') body = <ExportView project={p} onGo={go} />;
   else body = <MapView project={p} onGo={go} />;
 
   const idx = isModule(view) ? MODULES.findIndex((m) => m.id === view) : -1;
@@ -160,8 +169,10 @@ export function Workspace({ projectId, view, onView, onExit }: { projectId: stri
           <RailGroup title="Saída">
             <RailItem active={view === 'checklist'} onClick={() => go('checklist')} icon="check" label="Checklist de saída" meta={`${pr.score}/12`} />
             <RailItem active={view === 'preview'} onClick={() => go('preview')} icon="eye" label="Prévia e ritmo" />
+            <RailItem active={view === 'export'} onClick={() => go('export')} icon="download" label="Exportar e Canva" />
           </RailGroup>
           <RailGroup title="Estúdio">
+            <RailItem active={view === 'import'} onClick={() => go('import')} icon="layers" label="Importar material pronto" meta={p.imports?.length ? String(p.imports.length) : undefined} />
             <RailItem active={view === 'library'} onClick={() => go('library')} icon="image" label="Biblioteca de assets" meta={String(p.assets.length)} />
             <RailItem active={view === 'cover'} onClick={() => go('cover')} icon="sticker" label="Capa do sketchbook" />
           </RailGroup>

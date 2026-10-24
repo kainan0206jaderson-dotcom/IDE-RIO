@@ -227,6 +227,7 @@ function TensionMeter({ text }: { text: string }) {
 function TypeEditor({ project: p }: { project: Project }) {
   const { update } = useProjects();
   const ex = p.modules.M06.extra;
+  const custom = [...new Set((p.fonts ?? []).map((f) => f.family))];
   useEffect(() => {
     RIGID_FONTS.concat(LOOSE_FONTS).forEach(loadFont);
   }, []);
@@ -246,7 +247,7 @@ function TypeEditor({ project: p }: { project: Project }) {
       <div className="type-pick">
         <span className="eyebrow">Registro rígido</span>
         <div className="font-chips" role="radiogroup" aria-label="Fonte do registro rígido">
-          {RIGID_FONTS.map((f) => (
+          {[...custom, ...RIGID_FONTS].map((f) => (
             <button key={f} role="radio" aria-checked={ex.rigid === f} className={'font-chip' + (ex.rigid === f ? ' on' : '')} style={{ fontFamily: fontStack(f, 'sans') }} onClick={() => setX('rigid', f)}>
               {f}
             </button>
@@ -256,7 +257,7 @@ function TypeEditor({ project: p }: { project: Project }) {
       <div className="type-pick">
         <span className="eyebrow">Registro solto</span>
         <div className="font-chips" role="radiogroup" aria-label="Fonte do registro solto">
-          {LOOSE_FONTS.map((f) => (
+          {[...custom, ...LOOSE_FONTS].map((f) => (
             <button key={f} role="radio" aria-checked={ex.loose === f} className={'font-chip' + (ex.loose === f ? ' on' : '')} style={{ fontFamily: fontStack(f, 'serif') }} onClick={() => setX('loose', f)}>
               {f}
             </button>

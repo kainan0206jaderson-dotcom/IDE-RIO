@@ -17,6 +17,7 @@ interface Ctx {
   remove(id: string): Promise<void>;
   importProject(p: Project): Project;
   addAssets(id: string, files: File[]): Promise<Asset[]>;
+  addBlobs(id: string, items: { blob: Blob; name: string; type?: string; tags?: string[] }[]): Promise<Asset[]>;
   removeAsset(id: string, assetId: string): Promise<void>;
   saveState: SaveState;
   saveError: string | null;
@@ -150,32 +151,39 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [put],
   );
 
-  const addAssets = useCallback(
-    async (id: string, files: File[]) => {
+  /** Guarda binários (imagens, fontes) e registra no projeto como assets. */
+  const addBlobs = useCallback(
+    async (id: string, items: { blob: Blob; name: string; type?: string; tags?: string[] }[]) => {
       const added: Asset[] = [];
-      for (const f of files) {
-        if (!/^image\//.test(f.type)) continue;
+      for (const it of items) {
+        const type = it.type || it.blob.type || 'application/octet-stream';
+        const blob = it.blob.type === type ? it.blob : new Blob([it.blob], { type });
         let stored;
         try {
-          stored = await backendRef.current.blobs.put(f);
+          stored = await backendRef.current.blobs.put(blob);
         } catch {
-          stored = await localBlobs.put(f);
+          stored = await localBlobs.put(blob);
         }
-        const size = await imageSize(f);
+        const size = type.startsWith('image/') ? await imageSize(blob) : null;
         added.push({
           id: uid('a'),
-          name: f.name.replace(/\.[a-z0-9]+$/i, '') || 'imagem',
-          type: f.type,
-          tags: [],
+          name: it.name.replace(/\.[a-z0-9]+$/i, '') || 'arquivo',
+          type,
+          tags: it.tags ?? [],
           createdAt: Date.now(),
           ...stored,
           ...(size ?? {}),
         });
       }
-      if (added.length) update(id, (p) => p.assets.unshift(...added));
+      if (added.length) update(id, (p) => p.assets.unshift(...added.filter((a) => a.type.startsWith('image/'))));
       return added;
     },
     [update],
+  );
+
+  const addAssets = useCallback(
+    (id: string, files: File[]) => addBlobs(id, files.filter((f) => /^image\//.test(f.type)).map((f) => ({ blob: f, name: f.name }))),
+    [addBlobs],
   );
 
   const value = useMemo<Ctx>(
@@ -200,6 +208,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         if (p) for (const a of p.assets) backendRef.current.blobs.remove(a).catch(() => {});
       },
       addAssets,
+      addBlobs,
       async removeAsset(id, assetId) {
         const a = mapRef.current[id]?.assets.find((x) => x.id === assetId);
         update(id, (p) => {
@@ -213,7 +222,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       saveState,
       saveError,
     }),
-    [ready, backend, map, put, update, addAssets, saveState, saveError],
+    [ready, backend, map, put, update, addAssets, addBlobs, saveState, saveError],
   );
 
   return <ProjectsCtx.Provider value={value}>{children}</ProjectsCtx.Provider>;
