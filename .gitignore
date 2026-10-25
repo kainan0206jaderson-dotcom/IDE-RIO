@@ -3,3 +3,6 @@ dist/
 .DS_Store
 *.log
 .impeccable/
+bukku/node_modules/
+bukku/.next/
+bukku/out/
