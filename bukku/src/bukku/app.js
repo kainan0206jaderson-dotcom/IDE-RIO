@@ -19,7 +19,8 @@ export default async function start(){
 /* ================= base ================= */
 setNotify((h,m)=>toast(h,m));
 try{await Promise.race([Promise.all(['700 48px Caveat','500 32px Caveat','24px "Architects Daughter"','32px "Reenie Beanie"','64px Gloock','700 24px "Instrument Sans"','800 80px "Bricolage Grotesque"'].map(f=>document.fonts.load(f))),new Promise(r=>setTimeout(r,3000))]);}catch(e){}
-const IMG={samson:samsonImg.src,naruto:narutoImg.src,grad:gradImg.src,palette:paletteImg.src};
+const url=m=>typeof m==='string'?m:m.src; // Next entrega { src }, o esbuild do Artifact entrega a URL
+const IMG={samson:url(samsonImg),naruto:url(narutoImg),grad:url(gradImg),palette:url(paletteImg)};
 
 const canvas=$('#gl');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
@@ -624,9 +625,9 @@ $('#sStyle').onclick=()=>{['fut','sat','geo','fun'].forEach(k=>$('#s_'+k).value=
 /* AI + capabilities */
 let sampleP=null;const getSample=()=>sampleP||(sampleP=(async()=>{try{if(!window.claude||!claude.use)return null;const s=await claude.use('sample');if(!s)return null;let lim=null;try{lim=await s.limits();}catch(e){}return {s,lim};}catch(e){return null;}})());
 let dlP=null;const getDl=()=>dlP||(dlP=(async()=>{try{return window.claude&&claude.use?await claude.use('downloads'):null;}catch(e){return null;}})());
-async function collectImages(lim){if(!lim||!lim.images)return [];const out=[];for(const k of ['symbol','wordmark','ref']){if(out.length>=lim.images.maxCount)break;if(STU.files[k])out.push(STU.files[k].blob);else if(STU.inp.imgs[k]){try{out.push(await (await fetch(imgURL(STU.inp.imgs[k]))).blob());}catch(e){}}}return out;}
+async function collectImages(lim){if(!lim||!lim.images)return [];const out=[];out.kinds=[];for(const k of ['symbol','wordmark','ref']){if(out.length>=lim.images.maxCount)break;if(STU.files[k]){out.push(STU.files[k].blob);out.kinds.push(k);}else if(STU.inp.imgs[k]){try{out.push(await (await fetch(imgURL(STU.inp.imgs[k]))).blob());out.kinds.push(k);}catch(e){}}}return out;}
 async function uploadSlots(){for(const k of ['symbol','wordmark','ref']){const f=STU.files[k];if(f&&!STU.inp.imgs[k]){STU.inp.imgs[k]=await putImage(f.blob);}}}
-async function saveFile(name,data){const dl=await getDl();if(!dl){toast('Download indisponível','Abra o BUKKU dentro do Claude para salvar arquivos.');return false;}
+async function saveFile(name,data){const dl=await getDl();if(!dl){try{const blob=data instanceof Blob?data:new Blob([data],{type:/\.svg$/.test(name)?'image/svg+xml':/\.json$/.test(name)?'application/json':'text/plain'});const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);return true;}catch(e){toast('Não deu para salvar','Tente de novo em instantes.');return false;}}
   try{await dl.save({filename:name,data});return true;}catch(e){if(e&&e.code==='declined')return false;toast('Não deu para salvar',e&&e.code==='too_large'?'O arquivo ficou grande demais.':'Tente de novo em instantes.');return false;}}
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.append(s);});}
 /* board */
@@ -647,7 +648,7 @@ async function generate(refine){if(STU.busy)return;readForm();const inp=STU.inp;
   STU.busy=true;const btn=$('#stGen');btn.disabled=true;$('#stProg').hidden=false;$('#stProgT').textContent=refine?'ajustando':'pensando';$('#stEmpty').hidden=true;const ctl=STU.ctl=new AbortController();let brand=null;
   try{await uploadSlots();const sm=await getSample();
     if(sm){const imgs=await collectImages(sm.lim);const opts={modelTier:inp.quality,signal:ctl.signal,cache:false,onText:({text})=>{$('#stProgT').textContent=`escrevendo a marca · ${(text.length/1000).toFixed(1)}k`;}};if(imgs.length)opts.images=imgs;
-      try{const raw=await sm.s.json(buildPrompt(inp,refine,STU.brand,imgs.length,STU.files),opts);brand=normalizeBrand(raw,inp);}
+      try{const raw=await sm.s.json(buildPrompt(inp,refine,STU.brand,imgs.length,STU.files,imgs.kinds),opts);brand=normalizeBrand(raw,inp);}
       catch(e){const c=e&&e.code;if(c==='cancelled')return;
         if(['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed'].includes(c)){sampleP=Promise.resolve(null);toast('IA indisponível','Fiz uma versão base sem IA. Você pode gerar de novo depois.');}
         else if(c==='rate_limited'){toast('Muitos pedidos seguidos','Espere um pouco e gere de novo.');return;}
@@ -667,7 +668,7 @@ $('#stStop').onclick=()=>{if(STU.ctl)STU.ctl.abort();};
 const innerSVG=s=>String(s).replace(/^<svg[^>]*>/,'').replace(/<\/svg>\s*$/,'');
 function iconSprite(b,col){return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${b.icons.length*32} 24">${b.icons.map((ic,i)=>`<g transform="translate(${i*32} 0)">${innerSVG(colorize(ic.svg,[col,col,col,col,col]))}</g>`).join('')}</svg>`;}
 async function extract(k){const b=STU.brand;if(!b)return;const slug=slugify(b.name);const P=b.palette.map(c=>c.hex);
-  if(k==='logo'||k==='lockup'){await saveFile(slug+'-simbolo.svg',sizeSVG(colorize(b.symbol,P),1000));return;}
+  if(k==='logo'||k==='lockup'){const A=await prepare(b);if(A.symSource==='gerado'){await saveFile(slug+'-simbolo.svg',sizeSVG(colorize(b.symbol,P),1000));return;}const cv=makeCanvas(1000,1000,g=>symDraw(g,A,'pos',0,0,1000));await saveFile(slug+'-simbolo.png',await canvasBlob(cv,'image/png'));return;}
   if(k==='padrao'){await saveFile(slug+'-padrao.svg',sizeSVG(colorize(b.pattern,P),400));return;}
   if(k==='icones'){await saveFile(slug+'-icones.svg',iconSprite(b,rolesOf(b).dark));return;}
   if(k==='paleta'){await saveFile(slug+'-paleta.json',JSON.stringify(b.palette.map(c=>({nome:c.name,funcao:c.role,hex:c.hex,rgb:hexRgb(c.hex),cmyk:cmyk(c.hex)})),null,2));return;}
@@ -675,13 +676,17 @@ async function extract(k){const b=STU.brand;if(!b)return;const slug=slugify(b.na
 function packBoard(kinds){const unit=600,gap=20,cols=3;const occ=[];const place=[];const free=(r,c,s)=>{for(let i=0;i<s;i++){if(c+i>=cols||(occ[r]&&occ[r][c+i]))return false;}return true;};
   kinds.forEach(k=>{const s=PANEL_INFO[k][1];for(let r=0;;r++){let done=false;for(let c=0;c<cols;c++){if(free(r,c,s)){occ[r]=occ[r]||[];for(let i=0;i<s;i++)occ[r][c+i]=1;place.push([k,r,c,s]);done=true;break;}}if(done)break;}});
   const rows=occ.length;const W=cols*unit+(cols+1)*gap,H=rows*unit+(rows+1)*gap;return makeCanvas(W,H,g=>{g.fillStyle='#efe3d2';g.fillRect(0,0,W,H);place.forEach(([k,r,c,s])=>{const cv=STU.canv[k];if(cv)g.drawImage(cv,gap+c*(unit+gap),gap+r*(unit+gap),s*unit+(s-1)*gap,unit);});});}
+/* PNG codificado de forma síncrona: toBlob às vezes não chama de volta enquanto a cena 3D ocupa a GPU */
+function pngBytes(cv){const u=cv.toDataURL('image/png');const bin=atob(u.slice(u.indexOf(',')+1));const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}
 async function zipKit(){const b=STU.brand;if(!b)return;const btn=$('#stZip');btn.disabled=true;
-  try{if(!window.JSZip)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');const A=await prepare(b);const z=new JSZip();const P=b.palette.map(c=>c.hex);const R_=A.R;const slug=slugify(b.name);const man=[];
-    const add=(path,data,o)=>{z.file(path,data);man.push({arquivo:path,...o});};const png=async cv=>new Uint8Array(await (await canvasBlob(cv,'image/png')).arrayBuffer());const mono=h=>[h,h,h,h,h];
-    add('logos/simbolo.svg',sizeSVG(colorize(b.symbol,P),1000),{formato:'SVG',dimensoes:'vetor',transparencia:true,descricao:'Símbolo principal em cores'});
+  try{const JSZip=(await import('jszip')).default;const A=await prepare(b);const z=new JSZip();const P=b.palette.map(c=>c.hex);const R_=A.R;const slug=slugify(b.name);const man=[];
+    const add=(path,data,o)=>{z.file(path,data);man.push({arquivo:path,...o});};const png=async cv=>pngBytes(cv);const mono=h=>[h,h,h,h,h];
+    if(A.symSource==='gerado'){add('logos/simbolo.svg',sizeSVG(colorize(b.symbol,P),1000),{formato:'SVG',dimensoes:'vetor',transparencia:true,descricao:'Símbolo principal em cores'});
     add('logos/simbolo-claro.svg',sizeSVG(colorize(b.symbol,mono(R_.light)),1000),{formato:'SVG',dimensoes:'vetor',transparencia:true,descricao:'Símbolo em cor única clara, para fundos escuros'});
-    add('logos/simbolo-escuro.svg',sizeSVG(colorize(b.symbol,mono(R_.dark)),1000),{formato:'SVG',dimensoes:'vetor',transparencia:true,descricao:'Símbolo em cor única escura, para fundos claros'});
-    if(A.pos){const cv=makeCanvas(1000,1000,g=>symDraw(g,A,'pos',0,0,1000));add('logos/simbolo.png',await png(cv),{formato:'PNG',dimensoes:'1000x1000',transparencia:true,descricao:'Símbolo em PNG'});}
+    add('logos/simbolo-escuro.svg',sizeSVG(colorize(b.symbol,mono(R_.dark)),1000),{formato:'SVG',dimensoes:'vetor',transparencia:true,descricao:'Símbolo em cor única escura, para fundos claros'});}
+    if(A.pos){const cv=makeCanvas(1000,1000,g=>symDraw(g,A,'pos',0,0,1000));add('logos/simbolo.png',await png(cv),{formato:'PNG',dimensoes:'1000x1000',transparencia:true,descricao:'Símbolo em PNG'});
+      for(const [v,n,d] of [['light','claro','para fundos escuros'],['dark','escuro','para fundos claros']]){const c2=makeCanvas(1000,1000,g=>symDraw(g,A,v,0,0,1000));add(`logos/simbolo-${n}.png`,await png(c2),{formato:'PNG',dimensoes:'1000x1000',transparencia:true,descricao:'Símbolo '+d});}}
+    {const c3=makeCanvas(1600,520);wordmark(c3.getContext('2d'),b,800,400,1500,300,R_.dark,'center');add('logos/logotipo.png',await png(c3),{formato:'PNG',dimensoes:'1600x520',transparencia:true,descricao:'Logotipo'});}
     add('patterns/padrao.svg',sizeSVG(colorize(b.pattern,P),400),{formato:'SVG',dimensoes:'vetor',transparencia:true,descricao:'Módulo do padrão contínuo'});
     b.icons.forEach((ic,i)=>add(`icons/${String(i+1).padStart(2,'0')}-${slugify(ic.name)}.svg`,sizeSVG(colorize(ic.svg,mono(R_.dark)),240),{formato:'SVG',dimensoes:'vetor',transparencia:true,descricao:'Ícone: '+ic.name}));
     add('colors/paleta.json',JSON.stringify(b.palette.map(c=>({nome:c.name,funcao:c.role,hex:c.hex,rgb:hexRgb(c.hex),cmyk:cmyk(c.hex)})),null,2),{formato:'JSON',descricao:'Paleta com HEX, RGB e CMYK'});
@@ -693,8 +698,8 @@ async function zipKit(){const b=STU.brand;if(!b)return;const btn=$('#stZip');btn
     const blob=await z.generateAsync({type:'blob'});if(await saveFile(slug+'-kit-de-marca.zip',blob))toast('Kit salvo','Logos, padrão, ícones, cores, tipografia e manifesto em pastas.');}
   catch(e){toast('Não deu para montar o ZIP','Tente de novo em instantes.');}finally{btn.disabled=false;}}
 async function pdfBook(){const b=STU.brand;if(!b)return;const btn=$('#stPdf');btn.disabled=true;
-  try{if(!window.PDFLib)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js');const doc=await PDFLib.PDFDocument.create();
-    const addCv=async cv=>{const bytes=new Uint8Array(await (await canvasBlob(cv,'image/png')).arrayBuffer());const im=await doc.embedPng(bytes);const pg=doc.addPage([cv.width*.6,cv.height*.6]);pg.drawImage(im,{x:0,y:0,width:cv.width*.6,height:cv.height*.6});};
+  try{const PDFLib=await import('pdf-lib');const doc=await PDFLib.PDFDocument.create();
+    const addCv=async cv=>{const bytes=pngBytes(cv);const im=await doc.embedPng(bytes);const pg=doc.addPage([cv.width*.6,cv.height*.6]);pg.drawImage(im,{x:0,y:0,width:cv.width*.6,height:cv.height*.6});};
     const ks=Object.keys(STU.canv);if(STU.canv.capa)await addCv(STU.canv.capa);await addCv(await brandPage({brand:b},1));for(const k of ks)if(k!=='capa')await addCv(STU.canv[k]);
     doc.setTitle(b.name+' · brand book');const bytes=await doc.save();if(await saveFile(slugify(b.name)+'-brand-book.pdf',new Blob([bytes],{type:'application/pdf'})))toast('Brand book salvo','Uma página por peça do kit.');}
   catch(e){toast('Não deu para montar o PDF','Tente de novo em instantes.');}finally{btn.disabled=false;}}
@@ -921,4 +926,6 @@ requestAnimationFrame(()=>{loop();$('#loadTxt').textContent='';$('#btnEnter').di
   for(const d of posts){const P=posters[d.id];if(!P||!d.asset)continue;try{const img=await loadImage(imgURL(d.asset));applyPoster(d.id,coverCrop(img,P.aspect));P.current=d.asset;}catch(e){}}
 })();
 window.__ideario={openCoffeeMenu,openCoverMenu,camera,get sel(){return sel},enterDesk,exitDesk,next,prev,mainAction,select,player,get mode(){return mode},set mode(v){mode=v},setHUD,books,openPaint,brewCoffee,openPosterMenu,showNameForm};
+/* gancho de teste: ?debug expõe o estúdio para os testes automáticos */
+if(/[?&]debug\b/.test(location.search))window.__bukku={openStudio,generate,STU,drawPanel,prepare};
 }

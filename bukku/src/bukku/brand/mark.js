@@ -125,4 +125,4 @@ function brandMark(g,x,y,s,col,acc,title){g.save();g.translate(x,y);g.fillStyle=
 
 function raggedClip(n=14,amp=1.1){const p=[];for(let i=0;i<=n;i++)p.push(`${i/n*100}% ${R(0,amp)}%`);for(let i=1;i<=n;i++)p.push(`${100-R(0,amp*.8)}% ${i/n*100}%`);for(let i=n-1;i>=0;i--)p.push(`${i/n*100}% ${100-R(0,amp)}%`);for(let i=n-1;i>0;i--)p.push(`${R(0,amp*.8)}% ${i/n*100}%`);return `polygon(${p.join(',')})`;}
 
-export { LOGO, brandMark, stampLogo };
+export { BK, LOGO, brandMark, stampLogo };
