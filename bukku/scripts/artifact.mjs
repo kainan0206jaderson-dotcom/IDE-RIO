@@ -25,8 +25,8 @@ await build({
   loader: { '.jpg': 'file' },
   assetNames: '[name]-[hash]',
   publicPath: 'assets',
-  // o host do Artifact recusa bytes de controle crus dentro do JS
-  charset: 'utf8',
+  // ASCII: o host do Artifact recusa bytes de controle e o caractere U+FFFD crus no JS
+  charset: 'ascii',
   legalComments: 'none',
   logLevel: 'warning',
 });
