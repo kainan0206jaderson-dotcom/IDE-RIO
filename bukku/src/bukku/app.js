@@ -635,7 +635,7 @@ async function saveFile(name,data){const dl=await getDl();if(!dl){try{const blob
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.append(s);});}
 /* board */
 async function renderBoard(){const b=STU.brand;const grid=$('#stGrid');grid.textContent='';grid.style.gridAutoFlow='dense';$('#stEmpty').hidden=!!b||STU.busy;$('#stKitH').hidden=!b;$('#stRefine').hidden=!b;$('#stZip').disabled=$('#stPdf').disabled=!b;STU.canv={};renderGens();if(!b)return;
-  $('#stKitT').textContent=b.name;$('#stKitS').textContent=(b.ai?'gerado com IA'+(b.engine?' ('+b.engine+')':''):'versão base, sem IA')+' · '+b.fonts.display+' + '+b.fonts.body;
+  $('#stKitT').textContent=b.name;$('#stKitS').textContent=b.fonts.display+' + '+b.fonts.body;
   for(const k of kitKinds(b)){const [W,H]=PANEL_SIZE(k);const card=document.createElement('figure');card.className='panel'+(W>H?' w2':'');card.style.margin='0';const c=document.createElement('canvas');c.width=W;c.height=H;c.setAttribute('role','img');c.setAttribute('aria-label',PANEL_INFO[k][0]+' da marca '+b.name);
     const lb=document.createElement('span');lb.className='lbl2';lb.textContent=PANEL_INFO[k][0];const ex=document.createElement('button');ex.type='button';ex.className='ext';ex.textContent='extrair';ex.setAttribute('aria-label','Extrair '+PANEL_INFO[k][0]);ex.onclick=()=>extract(k);card.append(c,lb,ex);let box=grid;if(/^prancha/.test(k)){box=grid.querySelector('.boards');if(!box){box=document.createElement('div');box.className='boards';grid.append(box);}card.classList.remove('w2');}box.append(card);STU.canv[k]=c;}
   for(const k of Object.keys(STU.canv)){try{await drawPanel(k,b,STU.canv[k]);}catch(e){console.warn('painel',k,e);}}
@@ -644,10 +644,10 @@ async function renderBoard(){const b=STU.brand;const grid=$('#stGrid');grid.text
 async function logoRef(b){const A=await prepare(b);return makeCanvas(1024,1024,g=>{g.fillStyle='#ffffff';g.fillRect(0,0,1024,1024);symDraw(g,A,'pos',332,140,360);wordmark(g,b,512,800,860,150,A.R.dark,'center');}).toDataURL('image/png');}
 /* mundo da marca: fotos da IA gratuita chegam aos poucos e os painéis se redesenham */
 async function shootWorld(b){if(!await freeAIReachable()||STU.brand!==b)return;const jobs=[['mundo','mundo',1],hasGen()?['foto','foto',4]:['foto','collage',1]].filter(([k])=>STU.canv[k]);const boards=b.prancha&&hasGen()&&STU.canv.prancha1;if(!jobs.length&&!boards)return;
-  const total=jobs.reduce((a,j)=>a+j[2],0)+(boards?BOARD_N:0);let got=0,failed=0;const st=$('#stKitW');const show=()=>{if(STU.brand!==b)return;st.hidden=got+failed>=total;st.textContent=(boards?`desenhando as pranchas e fotografando o mundo da marca · ${got}/${total}`:`fotografando o mundo da marca · ${got}/${total}`)+(hasGen()?'':' · a IA gratuita sem chave faz uma foto a cada 45 s');};show();
+  const total=jobs.reduce((a,j)=>a+j[2],0)+(boards?BOARD_N:0);let got=0,failed=0;const st=$('#stKitW');const show=()=>{if(STU.brand!==b)return;st.hidden=got+failed>=total;st.textContent=(boards?`preparando as pranchas e as fotos da marca · ${got}/${total}`:`preparando as fotos da marca · ${got}/${total}`);};show();
   const boardJob=boards?logoRef(b).then(ref=>loadBoards(b,ref,async i=>{got++;show();const k='prancha'+(i+1);if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}})).then(rs=>{const bad=rs.filter(r=>r.status==='rejected');failed+=bad.length;show();if(bad.length===BOARD_N&&STU.brand===b){const c=bad[0].reason&&bad[0].reason.code;b.prancha='falhou';['prancha1','prancha2','prancha3','prancha4'].forEach(k=>STU.canv[k]&&drawPanel(k,b,STU.canv[k]).catch(()=>{}));toast(c==='bad_key'?'Chave recusada':c==='no_pollen'?'Sem Pollen na conta':'As pranchas não vieram',c==='no_pollen'?'O saldo gratuito da Pollinations acabou por hoje. As missões da conta liberam mais.':'Gere de novo daqui a pouco.');}}):null;
   await Promise.all([boardJob,...jobs.map(([k,kind,n])=>loadPhotos(b,kind,n,async()=>{got++;show();if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}}).then(rs=>{failed+=rs.filter(r=>r.status==='rejected').length;show();}))]);
-  if(failed&&STU.brand===b)toast('Algumas fotos não vieram','O serviço gratuito está cheio. Abra o projeto de novo daqui a pouco para completar.');}
+  if(failed&&STU.brand===b)toast('Algumas fotos não vieram','Abra o projeto de novo daqui a pouco para completar.');}
 function renderGens(){const box=$('#stGens');box.textContent='';if(STU.gens.length<2&&!(STU.gens.length===1&&STU.gens[0].brand!==STU.brand))return;
   STU.gens.forEach((gn,i)=>{const b=document.createElement('button');b.type='button';b.className='gthumb'+(gn.brand===STU.brand?' on':'');b.setAttribute('aria-label','Voltar para a geração '+(STU.gens.length-i));
     if(gn.thumb){const im=document.createElement('img');im.alt='';im.width=150;im.height=72;im.src=gn.thumb;b.append(im);}const sp=document.createElement('span');sp.textContent=`${gn.brand.name} · ${new Intl.DateTimeFormat('pt-BR',{hour:'2-digit',minute:'2-digit'}).format(new Date(gn.at))}`;b.append(sp);
@@ -668,12 +668,12 @@ async function generate(refine){if(STU.busy)return;readForm();const inp=STU.inp;
         else if(c==='refused'){toast('Pedido recusado','Reescreva o briefing e tente de novo.');return;}
         else if(c==='image_rejected'||c==='images_unavailable'){toast('Imagem não aceita','Troque a imagem ou gere sem ela.');return;}
         else{toast('A IA não respondeu','Tente de novo em instantes.');return;}}}
-    if(!brand&&await freeAIReachable()){const t0=Date.now();let until=0;const tick=setInterval(()=>{const w=Math.ceil((until-Date.now())/1000);$('#stProgT').textContent=w>0?`na fila da IA gratuita · ${w}s`:`${refine?'ajustando':'escrevendo a marca'} com IA gratuita · ${Math.round((Date.now()-t0)/1000)}s`;},1000);
+    if(!brand&&await freeAIReachable()){const t0=Date.now();let until=0;const tick=setInterval(()=>{const w=Math.ceil((until-Date.now())/1000);$('#stProgT').textContent=`${refine?'ajustando a marca':'gerando a marca'} · ${Math.round((Date.now()-t0)/1000)}s`;},1000);
       try{const raw=await textJSON(buildPrompt(inp,refine,STU.brand,0),{quality:inp.quality,signal:ctl.signal,onPhase:(m,w)=>{STU.engine='Pollinations · '+m;until=w?Date.now()+w:0;}});brand=normalizeBrand(raw,inp);brand.engine=STU.engine;}
       catch(e){const c=e&&e.code;if(c==='cancelled')return;
         if(c==='bad_key')toast('Chave recusada','A chave da Pollinations não vale. Apague ou troque em "IA" na ficha.');
-        else if(c==='rate_limited')toast('IA gratuita cheia','Fiz uma versão base. Gere de novo em um minuto.');
-        else toast('A IA gratuita não respondeu','Fiz uma versão base. Gere de novo em instantes.');}
+        else if(c==='rate_limited')toast('Muita gente gerando agora','Fiz uma versão base. Gere de novo em um minuto.');
+        else toast('A geração não respondeu','Fiz uma versão base. Gere de novo em instantes.');}
       finally{clearInterval(tick);}}
     if(sm&&brand&&!brand.engine)brand.engine='Claude';
     if(!brand){if(refine&&STU.brand){toast('Ajuste precisa da IA','Sem a IA, só dá para gerar uma versão base nova.');}brand=localBrand(inp);}
@@ -686,8 +686,8 @@ $('#stRefine').addEventListener('submit',e=>{e.preventDefault();const t=$('#fRef
 $('#stStop').onclick=()=>{if(STU.ctl)STU.ctl.abort();};
 /* qual IA o estúdio está usando, e a chave opcional da Pollinations */
 async function showEngine(){const el=$('#fEngine');const sm=await getSample();if(sm){el.textContent='IA: Claude, pelo claude.ai.';return;}
-  const ok=await freeAIReachable();const k=getKey();$('#fConnect').hidden=!ok||!!k||hasGen()||!canConnect();$('#fDisconnect').hidden=!k;
-  el.textContent=ok?(k?'IA: Pollinations conectada. Marca, fotos e as 4 pranchas com o seu logo.':hasGen()?'IA: liberada pelo BUKKU, sem cadastro. Marca, fotos e as 4 pranchas com o seu logo.':'IA: gratuita, Pollinations sem cadastro. Texto, símbolo e fotos do mundo da marca.'):'IA: offline. O estúdio gera a versão base no próprio navegador.';}
+  const ok=await freeAIReachable();const k=getKey();$('#fConnect').hidden=!ok||!!k||hasGen()||!canConnect();$('#fConnectNote').hidden=$('#fConnect').hidden;$('#fDisconnect').hidden=!k;
+  el.textContent=ok?(k?'IA: Pollinations conectada. Marca, fotos e as 4 pranchas com o seu logo.':hasGen()?'Marca, fotos e as 4 pranchas com o seu logo.':'Marca, símbolo e fotos do mundo da marca.'):'IA: offline. O estúdio gera a versão base no próprio navegador.';}
 $('#fConnect').onclick=()=>connectPollinations().catch(()=>toast('Não deu para abrir a Pollinations','Tente de novo ou cole uma chave abaixo.'));
 $('#fDisconnect').onclick=()=>{disconnect();$('#fKey').value='';toast('Pollinations desconectada','O estúdio volta para a IA gratuita sem cadastro.');showEngine();};
 finishConnect().then(ok=>{if(ok){toast('Pollinations conectada','Abra um caderno e gere a marca: agora saem também as 4 pranchas.');showEngine();}}).catch(()=>toast('A conexão não terminou','Tente conectar de novo.'));

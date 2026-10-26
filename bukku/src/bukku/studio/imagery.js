@@ -88,12 +88,13 @@ function boardTiles(b, i) {
   const apps = (b.apps && b.apps.length ? b.apps : Object.keys(APP_EN)).map((k) => APP_EN[k]).filter(Boolean);
   const sc = scenesOf(b);
   const pal = b.palette.map((c) => c.hex.toUpperCase()).join(' ');
-  // primeira linha de toda página: o núcleo da identidade, em arranjos diferentes
+  // primeira linha de toda página: o núcleo da identidade, sempre com o MESMO logo
+  // (nada de variações, monogramas ou construção, que levam o modelo a redesenhar a marca)
   const core = [
-    ['cover with the logo large and the tagline', 'logo on the primary color', `color palette with swatches and hex codes ${pal}`, `typography specimen: big "Aa" in a ${b.fonts.display}-like typeface`],
-    ['logo on light background with clear space', 'logo on dark background', `color palette bars with hex codes ${pal}`, `type hierarchy: headline, subhead and body in ${b.fonts.display} and ${b.fonts.body} style`],
-    ['symbol alone as app icon', 'wordmark alone, large', `color palette as stacked cards with hex codes ${pal}`, 'graphic pattern built from the symbol'],
-    ['logo construction grid', 'logo minimum sizes and misuse examples', `color proportions chart ${pal}`, 'set of six line icons'],
+    ['cover with the logo large and the tagline', 'the same logo in off-white on the primary color', `color palette with swatches and hex codes ${pal}`, `typography specimen: big "Aa" in a ${b.fonts.display}-like typeface`],
+    ['the same logo on a light background with generous clear space', 'the same logo in off-white on the darkest palette color', `color palette bars with hex codes ${pal}`, `type hierarchy: headline, subhead and body in ${b.fonts.display} and ${b.fonts.body} style`],
+    ['the same logo as a rounded app icon on the primary color', 'the same logo large on a light background', `color palette as stacked cards with hex codes ${pal}`, 'graphic pattern built from the exact symbol of the logo'],
+    ['the same logo centered on the primary color', 'the same logo on a light background', `color proportions chart ${pal}`, 'set of six line icons in one consistent style'],
   ][i];
   const pages = [
     ['set of six line icons', 'graphic elements and shapes', ...apps.slice(0, 4), `photo: ${sc[0]}`, 'business cards', 'product packaging box', 't-shirt mockup', 'poster with the headline', 'closing tile with the logo'],
@@ -103,26 +104,42 @@ function boardTiles(b, i) {
   ][i];
   return [...core, ...pages].slice(0, 16);
 }
-function boardPrompt(b, i) {
+function boardPrompt(b, i, chained) {
   const im = b.imagery || {};
   const style = (typeof im.style === 'string' && im.style.trim()) || styleFromKnobs(b.style || {});
   const pal = b.palette.map((c) => `${c.hex.toUpperCase()} (${c.role || c.name})`).join(', ');
   const tiles = boardTiles(b, i);
   return [
     `Premium brand identity presentation board for "${b.name}"${b.tagline ? ` — ${b.tagline}` : ''}.`,
-    `The attached image is THE logo (symbol + wordmark). Reproduce this exact logo faithfully wherever a logo appears; never redesign, distort or replace it.`,
-    `Strict color palette: ${pal}. Typography: headlines in a ${b.fonts.display}-like typeface, text in a ${b.fonts.body}-like typeface.`,
-    `Layout: a 4x4 grid of ${tiles.length} equal tiles with thin gutters, like a page of a professional brand guidelines book from a top design studio; page ${i + 1} of 4, labelled "0${i + 1}" in a small corner. Tiles: ${tiles.map((t, j) => `(${j + 1}) ${t}`).join('; ')}.`,
+    `Image 1 is THE logo: the exact symbol and the exact wordmark "${b.name}". It is the only brand mark. Every time a logo appears (on paper, fabric, packaging, screens, signs) copy image 1 exactly: same symbol shape, same lettering, same spelling "${b.name}", same proportions. Never redraw, simplify, stylize, recolor beyond the palette, or replace it with letters, monograms, initials or a different icon.`,
+    chained ? `Image 2 is page 1 of this same brand book: match its logo, colors, typography, photo style and layout grid exactly, so all pages look like one coherent system.` : '',
+    `Strict color palette, nothing else: ${pal}. Typography: headlines in a ${b.fonts.display}-like typeface, text in a ${b.fonts.body}-like typeface.`,
+    `Layout: a 4x4 grid of ${tiles.length} equal tiles with thin gutters, every tile fully filled with finished artwork (no empty or placeholder tiles), like a page of a professional brand guidelines book from a top design studio; page ${i + 1} of 4, labelled "0${i + 1}" in a small corner. Tiles: ${tiles.map((t, j) => `(${j + 1}) ${t}`).join('; ')}.`,
     `Art direction: ${style}. ${b.concept ? 'Concept: ' + b.concept.slice(0, 240) + '. ' : ''}Realistic mockups with soft natural light, consistent across every tile; crisp legible text; no watermark; no other brand names.`,
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
-const boardId = (b, i, ref) => 'b' + hashStr(boardPrompt(b, i) + '|' + (ref || '').length + '|' + (ref || '').slice(-200) + '|' + (b.quality || ''));
+const boardId = (b, i, ref) => 'b' + hashStr(boardPrompt(b, i, i > 0) + '|' + (ref || '').length + '|' + (ref || '').slice(-200) + '|' + (b.quality || ''));
 const refs = new WeakMap();
 function boardNow(b, i) { const r = refs.get(b); return r ? peekBoard(boardId(b, i, r)) : null; }
-function loadBoards(b, ref, onEach, signal) {
+/** A prancha 1 como imagem de referência leve (JPEG 1024 px) para as outras três. */
+function pageRef(img) {
+  const c = document.createElement('canvas');
+  const k = Math.min(1, 1024 / (img.naturalWidth || img.width));
+  c.width = Math.round((img.naturalWidth || img.width) * k); c.height = Math.round((img.naturalHeight || img.height) * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.85);
+}
+/** Desenha a prancha 1 primeiro; as outras três recebem o logo e a prancha 1
+ * como referência, para o símbolo, as cores e a tipografia não mudarem entre páginas. */
+async function loadBoards(b, ref, onEach, signal) {
   refs.set(b, ref);
-  return Promise.allSettled([...Array(BOARD_N)].map((_, i) =>
-    aiBoard(boardId(b, i, ref), boardPrompt(b, i), ref, { quality: b.quality || 'default', seed: seedOf(b) + 50 + i, signal }).then((img) => { onEach?.(i, img); return img; })));
+  const one = (i, imgs) => aiBoard(boardId(b, i, ref), boardPrompt(b, i, imgs.length > 1), imgs, { quality: b.quality || 'default', seed: seedOf(b) + 50 + i, signal })
+    .then((img) => { onEach?.(i, img); return img; });
+  const first = await Promise.allSettled([one(0, [ref])]);
+  let page1 = null;
+  try { if (first[0].status === 'fulfilled') page1 = pageRef(first[0].value); } catch (e) {}
+  const rest = await Promise.allSettled([1, 2, 3].map((i) => one(i, page1 ? [ref, page1] : [ref])));
+  return [...first, ...rest];
 }
 
 export { BOARD_N, boardNow, boardPrompt, loadBoards, colorName, loadPhotos, photoNow, photoPrompt, scenesOf, styleFromKnobs };
