@@ -2,13 +2,14 @@ import { harmonyPalette, hashStr, hex2hsl, hsl2hex, luma } from './color.js';
 import { FONTS_B, FONTS_D, FONT_BOLD } from './fonts.js';
 import { clamp } from '../lib/util.js';
 import { cleanSVG } from './svg.js';
+import { styleFromKnobs } from './imagery.js';
 const APPS=[['identidade',[['icones','ícones'],['padrao','padrão gráfico'],['voz','voz e slogans']]],['produto',[['embalagem','embalagem'],['camiseta','camiseta'],['sacola','sacola']]],['comunicação',[['social','post social'],['foto','direção de foto']]],['impresso e ambiente',[['papelaria','papelaria'],['fachada','fachada']]]];
 const ALL_APPS=APPS.flatMap(g=>g[1].map(a=>a[0]));
-const CORE=['capa','logo','lockup','paleta','tipografia'];
-const PANEL_INFO={capa:['capa',2],logo:['símbolo e logotipo',1],lockup:['assinaturas',1],paleta:['paleta',2],tipografia:['tipografia',1],icones:['ícones',1],padrao:['padrão gráfico',1],voz:['voz da marca',1],embalagem:['embalagem',1],camiseta:['camiseta',1],sacola:['sacola',1],social:['post social',1],foto:['direção de foto',1],papelaria:['papelaria',1],fachada:['fachada',2]};
-const ORDER=['capa','logo','paleta','lockup','tipografia','padrao','icones','voz','foto','social','camiseta','embalagem','sacola','fachada','papelaria'];
-const PANEL_SIZE=k=>PANEL_INFO[k][1]===2?[1240,600]:[600,600];
-const kitKinds=b=>{const apps=b.apps&&b.apps.length?b.apps:ALL_APPS;return ORDER.filter(k=>CORE.includes(k)||apps.includes(k));};
+const CORE=['capa','mundo','logo','lockup','paleta','tipografia'];
+const PANEL_INFO={capa:['capa',2],mundo:['mundo da marca',2],prancha1:['prancha 1 · identidade',2],prancha2:['prancha 2 · produto',2],prancha3:['prancha 3 · comunicação',2],prancha4:['prancha 4 · mundo',2],logo:['símbolo e logotipo',1],lockup:['assinaturas',1],paleta:['paleta',2],tipografia:['tipografia',1],icones:['ícones',1],padrao:['padrão gráfico',1],voz:['voz da marca',1],embalagem:['embalagem',1],camiseta:['camiseta',1],sacola:['sacola',1],social:['post social',1],foto:['direção de foto',1],papelaria:['papelaria',1],fachada:['fachada',2]};
+const ORDER=['capa','mundo','logo','paleta','lockup','tipografia','padrao','icones','voz','foto','social','camiseta','embalagem','sacola','fachada','papelaria'];
+const PANEL_SIZE=k=>/^prancha/.test(k)?[1200,800]:PANEL_INFO[k][1]===2?[1240,600]:[600,600];
+const kitKinds=b=>{const apps=b.apps&&b.apps.length?b.apps:ALL_APPS;const out=ORDER.filter(k=>CORE.includes(k)||apps.includes(k));return b.prancha?['prancha1','prancha2','prancha3','prancha4',...out]:out;};
 const SYM_TPL=[
   st=>`<svg viewBox="0 0 100 100"><path d="M10 72 H90 V82 H10 Z" fill="C1"/>${[...Array(7)].map((_,i)=>{const a=Math.PI+(i+1)*Math.PI/8,r2=36+(i%2?0:9);return `<line x1="${(50+Math.cos(a)*17).toFixed(1)}" y1="${(64+Math.sin(a)*17).toFixed(1)}" x2="${(50+Math.cos(a)*r2).toFixed(1)}" y2="${(64+Math.sin(a)*r2).toFixed(1)}" stroke="C1" stroke-width="7" stroke-linecap="${st.geo>50?'butt':'round'}"/>`;}).join('')}<circle cx="50" cy="64" r="10" fill="C3"/></svg>`,
   ()=>`<svg viewBox="0 0 100 100"><path d="M20 88 V48 A30 30 0 0 1 80 48 V88 Z" fill="C1"/><path d="M36 88 V52 A14 14 0 0 1 64 52 V88 Z" fill="C3"/><circle cx="76" cy="20" r="8" fill="C2"/></svg>`,
@@ -36,7 +37,8 @@ function localBrand(inp){const st=inp.style;const h=hashStr((inp.name||'marca')+
     palette:pal,fonts:{display,body},wordmark:{case:st.fun>65?'lower':st.fut>60?'upper':'title',tracking:st.fut>60?8:0,weight:FONT_BOLD.has(display)?700:400,style:st.fun>55&&st.geo<55?'recortado':'tipografia'},
     symbol:SYM_TPL[h%SYM_TPL.length](st),pattern:PAT_TPL[(h>>>3)%PAT_TPL.length](),icons:ICON_SET.map(([n,svg])=>({name:n,svg})),
     voice:{headline:st.fun>50?'Bora fazer junto?':'Feito para durar.',slogans:['Do jeito certo.','Com calma e cuidado.','Sempre por perto.'],cta:'Conheça a '+name},
-    photo:'Luz natural, texturas reais e as cores da marca em cena.',applications:{social:'Tem novidade chegando.',packaging:name,signage:name},ai:false};}
+    photo:'Luz natural, texturas reais e as cores da marca em cena.',applications:{social:'Tem novidade chegando.',packaging:name,signage:name},
+    imagery:{style:styleFromKnobs(st),scenes:[],seed:h%100000},style:{...st},briefing:(inp.briefing||'').slice(0,300),quality:inp.quality||'default',ai:false};}
 function normalizeBrand(r,inp){const base=localBrand(inp);if(!r||typeof r!=='object')return base;const o={...base,fonts:{...base.fonts},ai:true};const str=(v,n,d)=>typeof v==='string'&&v.trim()?v.trim().slice(0,n):d;
   o.name=str(r.name,40,base.name);o.tagline=str(r.tagline,90,base.tagline);o.concept=str(r.concept,600,base.concept);
   if(Array.isArray(r.keywords)){const k=r.keywords.filter(x=>typeof x==='string'&&x.trim()).slice(0,5).map(x=>x.slice(0,24));if(k.length)o.keywords=k;}
@@ -47,12 +49,13 @@ function normalizeBrand(r,inp){const base=localBrand(inp);if(!r||typeof r!=='obj
   if(Array.isArray(r.icons)){const ic=r.icons.map(i=>({name:str(i&&i.name,20,'ícone'),svg:cleanSVG(i&&i.svg,'0 0 24 24')})).filter(i=>i.svg).slice(0,6);if(ic.length>=3)o.icons=ic;}
   if(r.voice&&typeof r.voice==='object'){const sl=Array.isArray(r.voice.slogans)?r.voice.slogans.filter(x=>typeof x==='string'&&x.trim()).slice(0,3).map(x=>x.slice(0,70)):[];o.voice={headline:str(r.voice.headline,80,base.voice.headline),slogans:sl.length?sl:base.voice.slogans,cta:str(r.voice.cta,40,base.voice.cta)};}
   o.photo=str(r.photo,200,base.photo);if(r.applications&&typeof r.applications==='object')o.applications={social:str(r.applications.social,80,base.applications.social),packaging:str(r.applications.packaging,40,base.applications.packaging),signage:str(r.applications.signage,30,base.applications.signage)};
+  if(r.imagery&&typeof r.imagery==='object'){const sc=Array.isArray(r.imagery.scenes)?r.imagery.scenes.filter(x=>typeof x==='string'&&x.trim()).slice(0,4).map(x=>x.trim().slice(0,260)):[];o.imagery={...base.imagery,style:str(r.imagery.style,260,base.imagery.style),scenes:sc};}
   return o;}
 function buildPrompt(inp,refine,prev,nImgs,files={},kinds=null){const st=inp.style;const apps=inp.apps.length?inp.apps:ALL_APPS;const L=[
   'Você é diretor de arte sênior de um estúdio de branding brasileiro. Crie uma identidade visual completa, coerente, original e profissional.',
   `MARCA: ${inp.name}`,`BRIEFING: ${inp.briefing||'(livre: invente um conceito coerente com o nome)'}`,
   inp.colors.length?`CORES DO CLIENTE (use como base da paleta, nesta ordem): ${inp.colors.join(', ')}`:'CORES: escolha uma paleta harmônica e memorável.',
-  `ESTILO de 0 a 100: atemporal→futurista ${st.fut}; contido→saturado ${st.sat}; orgânico→geométrico ${st.geo}; sério→divertido ${st.fun}.`,`PEÇAS DO KIT: ${apps.join(', ')}.`];
+  `ESTILO de 0 a 100: atemporal→futurista ${st.fut}; contido→saturado ${st.sat}; orgânico→geométrico ${st.geo}; plano→texturizado ${st.tex??50}; calmo→enérgico ${st.ene??50}; sério→divertido ${st.fun}; acessível→luxuoso ${st.lux??50}; discreto→ousado ${st.ous??50}; tipografia clássica→experimental ${st.tip??50}; estático→dinâmico ${st.mov??50}. Respeite os extremos (abaixo de 25 ou acima de 75) com força.`,`PEÇAS DO KIT: ${apps.join(', ')}.`];
   if(nImgs){const ks=(kinds||['symbol','wordmark','ref'].filter(k=>inp.imgs&&(inp.imgs[k]||files[k]))).slice(0,nImgs);
     const role={symbol:'o SÍMBOLO que o cliente já tem. Ele é definitivo: o kit usa esta imagem como símbolo',wordmark:'o LOGOTIPO que o cliente já tem. Ele é definitivo: o kit usa esta imagem como logotipo',ref:'uma REFERÊNCIA de clima. Ela NÃO é o símbolo nem o logotipo da marca: use só a atmosfera (cores, textura, tom), nunca copie a forma nem descreva a referência como se fosse a marca'};
     L.push('IMAGENS ANEXADAS, na ordem: '+ks.map((k,i)=>`imagem ${i+1}: ${role[k]}`).join('; ')+'.');}
@@ -61,10 +64,11 @@ function buildPrompt(inp,refine,prev,nImgs,files={},kinds=null){const st=inp.sty
   L.push('REGRAS:','- Textos em português do Brasil, curtos e com personalidade.',`- fonts.display: exatamente uma destas: ${FONTS_D.join(', ')}.`,`- fonts.body: exatamente uma destas: ${FONTS_B.join(', ')}.`,
     '- SVGs só com <svg>, <g>, <path>, <circle>, <rect>, <ellipse>, <line>, <polyline>, <polygon>. Sem texto, imagens, gradientes ou CSS.',
     '- Cores dos SVGs: só os tokens C1 a C5 (fill="C1", stroke="C2"), que são as 5 cores da paleta na ordem; use "none" quando não houver preenchimento.',
-    '- symbol: viewBox "0 0 100 100"; símbolo original, simples, forte e legível pequeno, que traduza o conceito. Não copie marcas existentes nem a imagem de referência.','- concept: descreva só o que de fato existe no símbolo e no logotipo da marca (o enviado pelo cliente ou o SVG que você devolver). Nunca descreva um elemento que não está desenhado.','- wordmark.style: "recortado" para letras recortadas à mão, de tamanhos e inclinações diferentes; "tipografia" para o nome composto na fonte de títulos.',
+    '- symbol: viewBox "0 0 100 100"; símbolo original, simples, forte e legível pequeno, que traduza o conceito. Use de 2 a 5 formas cheias e grandes, ocupando a área de 10 a 90, com contraste entre C1 e outra cor. Não copie marcas existentes nem a imagem de referência.','- concept: descreva só o que de fato existe no símbolo e no logotipo da marca (o enviado pelo cliente ou o SVG que você devolver). Nunca descreva um elemento que não está desenhado.','- wordmark.style: "recortado" para letras recortadas à mão, de tamanhos e inclinações diferentes; "tipografia" para o nome composto na fonte de títulos.',
     '- pattern: viewBox "0 0 40 40"; módulo que se repete sem emenda nas bordas.','- icons: 6 ícones de linha no mesmo estilo; viewBox "0 0 24 24"; stroke="C1" stroke-width="2" fill="none".',
-    '- palette: 5 cores HEX (#rrggbb) na ordem: principal, apoio, acento, neutra clara, neutra escura.','Responda somente com este JSON:',
-    '{"name":"","tagline":"","concept":"2 ou 3 frases","keywords":["","","",""],"palette":[{"name":"","hex":"#000000","role":""}],"fonts":{"display":"","body":""},"wordmark":{"case":"upper|lower|title","tracking":0,"weight":400,"style":"recortado|tipografia"},"symbol":"<svg viewBox=\\"0 0 100 100\\">...</svg>","pattern":"<svg viewBox=\\"0 0 40 40\\">...</svg>","icons":[{"name":"","svg":"<svg viewBox=\\"0 0 24 24\\">...</svg>"}],"voice":{"headline":"","slogans":["","",""],"cta":""},"photo":"direção de fotografia em 1 frase","applications":{"social":"","packaging":"","signage":""}}');
+    '- palette: 5 cores HEX (#rrggbb) na ordem: principal, apoio, acento, neutra clara, neutra escura.',
+    '- imagery: direção de fotografia EM INGLÊS para um gerador de imagens. style: luz, lente, filme, textura e clima numa frase. scenes: 4 cenas diferentes e concretas do mundo da marca (lugar, pessoas, objetos, detalhe), uma frase cada, sem texto, letreiro, logo ou nome da marca dentro da cena.','Responda somente com este JSON:',
+    '{"name":"","tagline":"","concept":"2 ou 3 frases","keywords":["","","",""],"palette":[{"name":"","hex":"#000000","role":""}],"fonts":{"display":"","body":""},"wordmark":{"case":"upper|lower|title","tracking":0,"weight":400,"style":"recortado|tipografia"},"symbol":"<svg viewBox=\\"0 0 100 100\\">...</svg>","pattern":"<svg viewBox=\\"0 0 40 40\\">...</svg>","icons":[{"name":"","svg":"<svg viewBox=\\"0 0 24 24\\">...</svg>"}],"voice":{"headline":"","slogans":["","",""],"cta":""},"photo":"direção de fotografia em 1 frase","applications":{"social":"","packaging":"","signage":""},"imagery":{"style":"","scenes":["","","",""]}}');
   return L.join('\n');}
 /* prepared assets per brand */
 

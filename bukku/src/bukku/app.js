@@ -6,6 +6,8 @@ import { bodyFont, cover, dispFont, drawPanel, lines, prepare, symDraw, tile, wo
 import { APPS, PANEL_INFO, PANEL_SIZE, buildPrompt, kitKinds, localBrand, normalizeBrand } from './studio/brand.js';
 import { cmyk, harmonyPalette, hsl2hex, inkOn, luma, paletteFromImage, rolesOf, slugify } from './studio/color.js';
 import { colorize, sizeSVG } from './studio/svg.js';
+import { hasGen, canConnect, connectPollinations, connectedBySession, disconnect, finishConnect, freeAIReachable, getKey, setKey, textJSON } from './studio/ai.js';
+import { BOARD_N, loadBoards, loadPhotos } from './studio/imagery.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -594,8 +596,9 @@ async function closePaint(){if(pDirty)await savePainting();$('#paint').classList
 $('#pClose').onclick=closePaint;
 
 /* ================= brand studio (phase 2) ================= */
+const KNOBS=['fut','sat','geo','tex','ene','fun','lux','ous','tip','mov'];
 const STU={proj:null,inp:null,brand:null,gens:[],busy:false,ctl:null,files:{},canv:{}};
-const blankInputs=()=>({name:'',briefing:'',colors:[],style:{fut:50,sat:50,geo:50,fun:50},apps:[],quality:'default',imgs:{symbol:null,wordmark:null,ref:null}});
+const blankInputs=()=>({name:'',briefing:'',colors:[],style:{fut:50,sat:50,geo:50,tex:50,ene:50,fun:50,lux:50,ous:50,tip:50,mov:50},apps:[],quality:'default',imgs:{symbol:null,wordmark:null,ref:null}});
 function setSlot(s,url){const el=document.querySelector(`.slot[data-slot="${s}"]`);el.style.backgroundImage=url?`url("${url}")`:'';el.classList.toggle('has',!!url);}
 function renderColors(){const box=$('#fColors');box.textContent='';const cs=STU.inp.colors;
   if(!cs.length){const s=document.createElement('span');s.className='swauto';s.textContent='a IA escolhe as cores';box.append(s);}
@@ -604,9 +607,9 @@ function renderColors(){const box=$('#fColors');box.textContent='';const cs=STU.
   $('#cAdd').disabled=cs.length>=5;$('#cAuto').classList.toggle('on',!cs.length);$('#cImg').hidden=!(STU.files.ref||STU.files.symbol||STU.inp.imgs.ref||STU.inp.imgs.symbol);}
 function renderApps(){const box=$('#fApps');box.textContent='';APPS.forEach(([gname,items])=>{const h=document.createElement('p');h.className='grp';h.textContent=gname;const c=document.createElement('div');c.className='chips';
   items.forEach(([k,l])=>{const on=STU.inp.apps.includes(k);const b=document.createElement('button');b.type='button';b.className='chip-t'+(on?' on':'');b.textContent=l;b.setAttribute('aria-pressed',String(on));b.onclick=()=>{const a=STU.inp.apps;const i=a.indexOf(k);if(i>=0)a.splice(i,1);else a.push(k);renderApps();};c.append(b);});box.append(h,c);});}
-function fillForm(){const i=STU.inp;$('#fName').value=i.name||'';$('#fBrief').value=i.briefing||'';['fut','sat','geo','fun'].forEach(k=>$('#s_'+k).value=i.style[k]);renderColors();renderApps();
+function fillForm(){const i=STU.inp;$('#fName').value=i.name||'';$('#fBrief').value=i.briefing||'';KNOBS.forEach(k=>$('#s_'+k).value=i.style[k]??50);renderColors();renderApps();
   document.querySelectorAll('#fQual button').forEach(b=>b.classList.toggle('on',b.dataset.q===i.quality));['symbol','wordmark','ref'].forEach(s=>setSlot(s,i.imgs[s]?imgURL(i.imgs[s]):null));}
-function readForm(){const i=STU.inp;i.name=$('#fName').value.trim();i.briefing=$('#fBrief').value.trim();['fut','sat','geo','fun'].forEach(k=>i.style[k]=+$('#s_'+k).value);}
+function readForm(){const i=STU.inp;i.name=$('#fName').value.trim();i.briefing=$('#fBrief').value.trim();KNOBS.forEach(k=>i.style[k]=+$('#s_'+k).value);}
 document.querySelectorAll('#fQual button').forEach(b=>b.onclick=()=>{STU.inp.quality=b.dataset.q;document.querySelectorAll('#fQual button').forEach(x=>x.classList.toggle('on',x===b));});
 document.querySelectorAll('#stForm input[type=file]').forEach(inp=>inp.addEventListener('change',async()=>{const f=inp.files&&inp.files[0];inp.value='';if(!f)return;const slot=inp.dataset.slot;
   try{const url=URL.createObjectURL(f);const img=await loadImage(url);URL.revokeObjectURL(url);const max=slot==='ref'?900:600;const sc=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const w=Math.round(img.naturalWidth*sc),h=Math.round(img.naturalHeight*sc);
@@ -621,7 +624,7 @@ $('#sColors').onclick=()=>{readForm();STU.inp.colors=harmonyPalette(Math.random(
 $('#cAdd').onclick=()=>{if(STU.inp.colors.length>=5)return;STU.inp.colors.push(hsl2hex(Math.random()*360,.5,.5));renderColors();};
 $('#cAuto').onclick=()=>{STU.inp.colors=[];renderColors();};
 $('#cImg').onclick=async()=>{let cv=(STU.files.ref||STU.files.symbol||{}).cv;if(!cv){const ref=STU.inp.imgs.ref||STU.inp.imgs.symbol;if(ref){try{cv=await loadImage(imgURL(ref));}catch(e){}}}if(!cv)return;STU.inp.colors=paletteFromImage(cv,4);renderColors();buzz(6);};
-$('#sStyle').onclick=()=>{['fut','sat','geo','fun'].forEach(k=>$('#s_'+k).value=Math.round(10+Math.random()*80));buzz(6);};
+$('#sStyle').onclick=()=>{KNOBS.forEach(k=>$('#s_'+k).value=Math.round(10+Math.random()*80));buzz(6);};
 /* AI + capabilities */
 let sampleP=null;const getSample=()=>sampleP||(sampleP=(async()=>{try{if(!window.claude||!claude.use)return null;const s=await claude.use('sample');if(!s)return null;let lim=null;try{lim=await s.limits();}catch(e){}return {s,lim};}catch(e){return null;}})());
 let dlP=null;const getDl=()=>dlP||(dlP=(async()=>{try{return window.claude&&claude.use?await claude.use('downloads'):null;}catch(e){return null;}})());
@@ -632,10 +635,19 @@ async function saveFile(name,data){const dl=await getDl();if(!dl){try{const blob
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.append(s);});}
 /* board */
 async function renderBoard(){const b=STU.brand;const grid=$('#stGrid');grid.textContent='';grid.style.gridAutoFlow='dense';$('#stEmpty').hidden=!!b||STU.busy;$('#stKitH').hidden=!b;$('#stRefine').hidden=!b;$('#stZip').disabled=$('#stPdf').disabled=!b;STU.canv={};renderGens();if(!b)return;
-  $('#stKitT').textContent=b.name;$('#stKitS').textContent=(b.ai?'gerado com IA':'versão base, sem IA')+' · '+b.fonts.display+' + '+b.fonts.body;
+  $('#stKitT').textContent=b.name;$('#stKitS').textContent=(b.ai?'gerado com IA'+(b.engine?' ('+b.engine+')':''):'versão base, sem IA')+' · '+b.fonts.display+' + '+b.fonts.body;
   for(const k of kitKinds(b)){const [W,H]=PANEL_SIZE(k);const card=document.createElement('figure');card.className='panel'+(W>H?' w2':'');card.style.margin='0';const c=document.createElement('canvas');c.width=W;c.height=H;c.setAttribute('role','img');c.setAttribute('aria-label',PANEL_INFO[k][0]+' da marca '+b.name);
-    const lb=document.createElement('span');lb.className='lbl2';lb.textContent=PANEL_INFO[k][0];const ex=document.createElement('button');ex.type='button';ex.className='ext';ex.textContent='extrair';ex.setAttribute('aria-label','Extrair '+PANEL_INFO[k][0]);ex.onclick=()=>extract(k);card.append(c,lb,ex);grid.append(card);STU.canv[k]=c;}
-  for(const k of Object.keys(STU.canv)){try{await drawPanel(k,b,STU.canv[k]);}catch(e){console.warn('painel',k,e);}}}
+    const lb=document.createElement('span');lb.className='lbl2';lb.textContent=PANEL_INFO[k][0];const ex=document.createElement('button');ex.type='button';ex.className='ext';ex.textContent='extrair';ex.setAttribute('aria-label','Extrair '+PANEL_INFO[k][0]);ex.onclick=()=>extract(k);card.append(c,lb,ex);let box=grid;if(/^prancha/.test(k)){box=grid.querySelector('.boards');if(!box){box=document.createElement('div');box.className='boards';grid.append(box);}card.classList.remove('w2');}box.append(card);STU.canv[k]=c;}
+  for(const k of Object.keys(STU.canv)){try{await drawPanel(k,b,STU.canv[k]);}catch(e){console.warn('painel',k,e);}}
+  shootWorld(b);}
+/* logo limpo, em fundo branco, para a IA usar como referência nas pranchas */
+async function logoRef(b){const A=await prepare(b);return makeCanvas(1024,1024,g=>{g.fillStyle='#ffffff';g.fillRect(0,0,1024,1024);symDraw(g,A,'pos',332,140,360);wordmark(g,b,512,800,860,150,A.R.dark,'center');}).toDataURL('image/png');}
+/* mundo da marca: fotos da IA gratuita chegam aos poucos e os painéis se redesenham */
+async function shootWorld(b){if(!await freeAIReachable()||STU.brand!==b)return;const jobs=[['mundo','mundo',1],hasGen()?['foto','foto',4]:['foto','collage',1]].filter(([k])=>STU.canv[k]);const boards=b.prancha&&hasGen()&&STU.canv.prancha1;if(!jobs.length&&!boards)return;
+  const total=jobs.reduce((a,j)=>a+j[2],0)+(boards?BOARD_N:0);let got=0,failed=0;const st=$('#stKitW');const show=()=>{if(STU.brand!==b)return;st.hidden=got+failed>=total;st.textContent=(boards?`desenhando as pranchas e fotografando o mundo da marca · ${got}/${total}`:`fotografando o mundo da marca · ${got}/${total}`)+(hasGen()?'':' · a IA gratuita sem chave faz uma foto a cada 45 s');};show();
+  const boardJob=boards?logoRef(b).then(ref=>loadBoards(b,ref,async i=>{got++;show();const k='prancha'+(i+1);if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}})).then(rs=>{const bad=rs.filter(r=>r.status==='rejected');failed+=bad.length;show();if(bad.length===BOARD_N&&STU.brand===b){const c=bad[0].reason&&bad[0].reason.code;b.prancha='falhou';['prancha1','prancha2','prancha3','prancha4'].forEach(k=>STU.canv[k]&&drawPanel(k,b,STU.canv[k]).catch(()=>{}));toast(c==='bad_key'?'Chave recusada':c==='no_pollen'?'Sem Pollen na conta':'As pranchas não vieram',c==='no_pollen'?'O saldo gratuito da Pollinations acabou por hoje. As missões da conta liberam mais.':'Gere de novo daqui a pouco.');}}):null;
+  await Promise.all([boardJob,...jobs.map(([k,kind,n])=>loadPhotos(b,kind,n,async()=>{got++;show();if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}}).then(rs=>{failed+=rs.filter(r=>r.status==='rejected').length;show();}))]);
+  if(failed&&STU.brand===b)toast('Algumas fotos não vieram','O serviço gratuito está cheio. Abra o projeto de novo daqui a pouco para completar.');}
 function renderGens(){const box=$('#stGens');box.textContent='';if(STU.gens.length<2&&!(STU.gens.length===1&&STU.gens[0].brand!==STU.brand))return;
   STU.gens.forEach((gn,i)=>{const b=document.createElement('button');b.type='button';b.className='gthumb'+(gn.brand===STU.brand?' on':'');b.setAttribute('aria-label','Voltar para a geração '+(STU.gens.length-i));
     if(gn.thumb){const im=document.createElement('img');im.alt='';im.width=150;im.height=72;im.src=gn.thumb;b.append(im);}const sp=document.createElement('span');sp.textContent=`${gn.brand.name} · ${new Intl.DateTimeFormat('pt-BR',{hour:'2-digit',minute:'2-digit'}).format(new Date(gn.at))}`;b.append(sp);
@@ -656,14 +668,31 @@ async function generate(refine){if(STU.busy)return;readForm();const inp=STU.inp;
         else if(c==='refused'){toast('Pedido recusado','Reescreva o briefing e tente de novo.');return;}
         else if(c==='image_rejected'||c==='images_unavailable'){toast('Imagem não aceita','Troque a imagem ou gere sem ela.');return;}
         else{toast('A IA não respondeu','Tente de novo em instantes.');return;}}}
+    if(!brand&&await freeAIReachable()){const t0=Date.now();let until=0;const tick=setInterval(()=>{const w=Math.ceil((until-Date.now())/1000);$('#stProgT').textContent=w>0?`na fila da IA gratuita · ${w}s`:`${refine?'ajustando':'escrevendo a marca'} com IA gratuita · ${Math.round((Date.now()-t0)/1000)}s`;},1000);
+      try{const raw=await textJSON(buildPrompt(inp,refine,STU.brand,0),{quality:inp.quality,signal:ctl.signal,onPhase:(m,w)=>{STU.engine='Pollinations · '+m;until=w?Date.now()+w:0;}});brand=normalizeBrand(raw,inp);brand.engine=STU.engine;}
+      catch(e){const c=e&&e.code;if(c==='cancelled')return;
+        if(c==='bad_key')toast('Chave recusada','A chave da Pollinations não vale. Apague ou troque em "IA" na ficha.');
+        else if(c==='rate_limited')toast('IA gratuita cheia','Fiz uma versão base. Gere de novo em um minuto.');
+        else toast('A IA gratuita não respondeu','Fiz uma versão base. Gere de novo em instantes.');}
+      finally{clearInterval(tick);}}
+    if(sm&&brand&&!brand.engine)brand.engine='Claude';
     if(!brand){if(refine&&STU.brand){toast('Ajuste precisa da IA','Sem a IA, só dá para gerar uma versão base nova.');}brand=localBrand(inp);}
-    brand.apps=[...inp.apps];brand.user={...inp.imgs};STU.brand=brand;await renderBoard();
+    brand.apps=[...inp.apps];brand.user={...inp.imgs};if(hasGen()&&await freeAIReachable())brand.prancha=true;STU.brand=brand;await renderBoard();
     const thumb=STU.canv.capa?makeCanvas(300,145,g=>g.drawImage(STU.canv.capa,0,0,300,145)).toDataURL('image/jpeg',.7):'';STU.gens.unshift({brand,inputs:JSON.parse(JSON.stringify(inp)),at:Date.now(),thumb});STU.gens=STU.gens.slice(0,4);renderGens();
     await saveProject();buzz([8,30,8]);if(refine)$('#fRefine').value='';if(innerWidth<760)$('#stBoard').scrollIntoView({behavior:REDUCED?'auto':'smooth'});}
   finally{STU.busy=false;btn.disabled=false;$('#stProg').hidden=true;if(!STU.brand)$('#stEmpty').hidden=false;}}
 $('#stForm').addEventListener('submit',e=>{e.preventDefault();generate(null);});
 $('#stRefine').addEventListener('submit',e=>{e.preventDefault();const t=$('#fRefine').value.trim();if(t&&STU.brand)generate(t);});
 $('#stStop').onclick=()=>{if(STU.ctl)STU.ctl.abort();};
+/* qual IA o estúdio está usando, e a chave opcional da Pollinations */
+async function showEngine(){const el=$('#fEngine');const sm=await getSample();if(sm){el.textContent='IA: Claude, pelo claude.ai.';return;}
+  const ok=await freeAIReachable();const k=getKey();$('#fConnect').hidden=!ok||!!k||hasGen()||!canConnect();$('#fDisconnect').hidden=!k;
+  el.textContent=ok?(k?'IA: Pollinations conectada. Marca, fotos e as 4 pranchas com o seu logo.':hasGen()?'IA: liberada pelo BUKKU, sem cadastro. Marca, fotos e as 4 pranchas com o seu logo.':'IA: gratuita, Pollinations sem cadastro. Texto, símbolo e fotos do mundo da marca.'):'IA: offline. O estúdio gera a versão base no próprio navegador.';}
+$('#fConnect').onclick=()=>connectPollinations().catch(()=>toast('Não deu para abrir a Pollinations','Tente de novo ou cole uma chave abaixo.'));
+$('#fDisconnect').onclick=()=>{disconnect();$('#fKey').value='';toast('Pollinations desconectada','O estúdio volta para a IA gratuita sem cadastro.');showEngine();};
+finishConnect().then(ok=>{if(ok){toast('Pollinations conectada','Abra um caderno e gere a marca: agora saem também as 4 pranchas.');showEngine();}}).catch(()=>toast('A conexão não terminou','Tente conectar de novo.'));
+$('#fKey').value=connectedBySession()?'':getKey();$('#fKeySave').onclick=()=>{setKey($('#fKey').value);toast($('#fKey').value.trim()?'Chave salva':'Chave apagada',$('#fKey').value.trim()?'As próximas gerações usam os modelos da sua conta Pollinations.':'O estúdio volta para a IA gratuita sem cadastro.');showEngine();};
+showEngine();
 /* extract & export */
 const innerSVG=s=>String(s).replace(/^<svg[^>]*>/,'').replace(/<\/svg>\s*$/,'');
 function iconSprite(b,col){return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${b.icons.length*32} 24">${b.icons.map((ic,i)=>`<g transform="translate(${i*32} 0)">${innerSVG(colorize(ic.svg,[col,col,col,col,col]))}</g>`).join('')}</svg>`;}
@@ -691,8 +720,8 @@ async function zipKit(){const b=STU.brand;if(!b)return;const btn=$('#stZip');btn
     b.icons.forEach((ic,i)=>add(`icons/${String(i+1).padStart(2,'0')}-${slugify(ic.name)}.svg`,sizeSVG(colorize(ic.svg,mono(R_.dark)),240),{formato:'SVG',dimensoes:'vetor',transparencia:true,descricao:'Ícone: '+ic.name}));
     add('colors/paleta.json',JSON.stringify(b.palette.map(c=>({nome:c.name,funcao:c.role,hex:c.hex,rgb:hexRgb(c.hex),cmyk:cmyk(c.hex)})),null,2),{formato:'JSON',descricao:'Paleta com HEX, RGB e CMYK'});
     add('typography/fontes.txt',`Títulos: ${b.fonts.display}\nhttps://fonts.google.com/specimen/${b.fonts.display.replace(/ /g,'+')}\n\nTexto: ${b.fonts.body}\nhttps://fonts.google.com/specimen/${b.fonts.body.replace(/ /g,'+')}\n\nAmbas com licença aberta do Google Fonts.`,{formato:'TXT',descricao:'Famílias tipográficas e links'});
-    for(const k of Object.keys(STU.canv)){const cv=STU.canv[k];const folder=['capa','logo','lockup','paleta','tipografia','padrao','icones','voz'].includes(k)?'brand-assets':k==='foto'?'moodboards':'applications';add(`${folder}/${k}.png`,await png(cv),{formato:'PNG',dimensoes:`${cv.width}x${cv.height}`,transparencia:false,descricao:'Página de identidade: '+PANEL_INFO[k][0]});}
-    const board=packBoard(Object.keys(STU.canv));add('moodboards/prancha.png',await png(board),{formato:'PNG',dimensoes:`${board.width}x${board.height}`,transparencia:false,descricao:'Prancha com todas as páginas do kit'});
+    for(const k of Object.keys(STU.canv)){const cv=STU.canv[k];const folder=['capa','logo','lockup','paleta','tipografia','padrao','icones','voz'].includes(k)?'brand-assets':k==='foto'||k==='mundo'?'moodboards':'applications';add(`${folder}/${k}.png`,await png(cv),{formato:'PNG',dimensoes:`${cv.width}x${cv.height}`,transparencia:false,descricao:'Página de identidade: '+PANEL_INFO[k][0]});}
+    const board=packBoard(Object.keys(STU.canv).filter(k=>!/^prancha/.test(k)));add('moodboards/prancha.png',await png(board),{formato:'PNG',dimensoes:`${board.width}x${board.height}`,transparencia:false,descricao:'Prancha com todas as páginas do kit'});
     add('documentation/conceito.txt',`${b.name}\n${b.tagline}\n\n${b.concept}\n\nPalavras-chave: ${b.keywords.join(', ')}\nFotografia: ${b.photo}\nVoz: ${b.voice.headline} / ${b.voice.slogans.join(' / ')}`,{formato:'TXT',descricao:'Conceito e voz da marca'});
     z.file('documentation/manifest.json',JSON.stringify({marca:b.name,gerado_em:new Date().toISOString(),origem:b.ai?'BUKKU + IA':'BUKKU (versão base)',arquivos:man},null,2));
     const blob=await z.generateAsync({type:'blob'});if(await saveFile(slug+'-kit-de-marca.zip',blob))toast('Kit salvo','Logos, padrão, ícones, cores, tipografia e manifesto em pastas.');}

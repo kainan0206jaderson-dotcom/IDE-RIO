@@ -277,3 +277,15 @@ label.pill{cursor:pointer}
   .st-actions .ghost span{display:none}
 }
 @media (prefers-reduced-motion:reduce){.ui,.cta,.round,.pill,.tool{transition:none}.prog .dots i{animation:none;opacity:.8}}
+/* IA gratuita: chave opcional e fotos chegando */
+.keybox{font-size:12px;color:var(--ink-soft);margin-top:6px}
+.keybox summary{cursor:pointer;padding:4px 0}
+.keybox .row{display:flex;gap:8px;align-items:center;margin-top:6px}
+.keybox input{flex:1;min-width:0;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--ink-soft);border-radius:10px;background:transparent;color:inherit}
+.keybox a{color:inherit}
+.kit-h .kitw{flex-basis:100%;font-size:12px}
+.kit-h .kitw::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;animation:kitw 1.2s ease-in-out infinite}
+@keyframes kitw{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.kit-h .kitw::before{animation:none}}
+.kit .boards{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:640px){.kit .boards{grid-template-columns:1fr}}

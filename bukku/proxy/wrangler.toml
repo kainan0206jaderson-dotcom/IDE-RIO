@@ -1,0 +1,7 @@
+name = "bukku-ponte"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+ORIGINS = "https://kainan0206jaderson-dotcom.github.io"
+DAILY = "60"

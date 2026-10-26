@@ -127,10 +127,19 @@ const markup = String.raw`<canvas id="gl" tabindex="0" aria-label="Escritório d
         </fieldset>
         <fieldset class="card">
           <legend>estilo</legend>
+          <p class="grp">visual</p>
           <div class="sl"><span>atemporal</span><input type="range" id="s_fut" min="0" max="100" value="50" aria-label="Atemporal ou futurista"><span>futurista</span></div>
           <div class="sl"><span>contido</span><input type="range" id="s_sat" min="0" max="100" value="50" aria-label="Contido ou saturado"><span>saturado</span></div>
           <div class="sl"><span>orgânico</span><input type="range" id="s_geo" min="0" max="100" value="50" aria-label="Orgânico ou geométrico"><span>geométrico</span></div>
+          <div class="sl"><span>plano</span><input type="range" id="s_tex" min="0" max="100" value="50" aria-label="Plano ou texturizado"><span>texturizado</span></div>
+          <p class="grp">voz</p>
+          <div class="sl"><span>calmo</span><input type="range" id="s_ene" min="0" max="100" value="50" aria-label="Calmo ou enérgico"><span>enérgico</span></div>
           <div class="sl"><span>sério</span><input type="range" id="s_fun" min="0" max="100" value="50" aria-label="Sério ou divertido"><span>divertido</span></div>
+          <div class="sl"><span>acessível</span><input type="range" id="s_lux" min="0" max="100" value="50" aria-label="Acessível ou luxuoso"><span>luxuoso</span></div>
+          <div class="sl"><span>discreto</span><input type="range" id="s_ous" min="0" max="100" value="50" aria-label="Discreto ou ousado"><span>ousado</span></div>
+          <p class="grp">forma</p>
+          <div class="sl"><span>clássica</span><input type="range" id="s_tip" min="0" max="100" value="50" aria-label="Tipografia clássica ou experimental"><span>experimental</span></div>
+          <div class="sl"><span>estático</span><input type="range" id="s_mov" min="0" max="100" value="50" aria-label="Estático ou dinâmico"><span>dinâmico</span></div>
           <div class="row"><button type="button" class="mini" id="sStyle">↻ me surpreenda</button></div>
         </fieldset>
         <fieldset class="card">
@@ -145,13 +154,20 @@ const markup = String.raw`<canvas id="gl" tabindex="0" aria-label="Escritório d
             <button type="button" data-q="default" class="on">Equilibrada<small>~1 min</small></button>
             <button type="button" data-q="complex">Alta<small>~2 min</small></button>
           </div>
+          <p class="note" id="fEngine">IA: verificando…</p>
+          <div class="row"><button type="button" class="mini" id="fConnect">conectar Pollinations (grátis)</button><button type="button" class="mini" id="fDisconnect" hidden>desconectar</button></div>
+          <p class="note">Sem conta a IA gratuita já escreve a marca e faz fotos. Com uma conta Pollinations (entra com o GitHub e usa o Pollen grátis das missões), o estúdio desenha também as 4 pranchas com o seu logo.</p>
+          <details class="keybox"><summary>colar uma chave da Pollinations</summary>
+            <p class="note">Crie em <a href="https://enter.pollinations.ai/keys" target="_blank" rel="noopener">enter.pollinations.ai/keys</a>, de preferência com limite de gasto. Ela fica só neste navegador.</p>
+            <div class="row"><input id="fKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk_…" aria-label="Chave da Pollinations"><button type="button" class="mini" id="fKeySave">salvar</button></div>
+          </details>
         </fieldset>
         <button class="pill gen" id="stGen" type="submit">Gerar marca →</button>
       </form>
       <div class="st-board" id="stBoard">
         <div class="empty" id="stEmpty"><span class="k">pronto.</span><b>Preencha a ficha e gere o primeiro kit da sua marca.</b><small>Você recebe as páginas de identidade, e elas viram o brand book no caderno.</small></div>
         <div class="prog" id="stProg" hidden><b id="stProgT">pensando</b><span class="dots"><i></i><i></i><i></i></span><button type="button" class="mini" id="stStop">parar</button></div>
-        <div class="kit-h" id="stKitH" hidden><b id="stKitT">kit</b><span id="stKitS"></span></div>
+        <div class="kit-h" id="stKitH" hidden><b id="stKitT">kit</b><span id="stKitS"></span><span class="kitw" id="stKitW" hidden></span></div>
         <div class="kit" id="stGrid"></div>
         <form class="refine" id="stRefine" hidden><input id="fRefine" name="refine" maxlength="200" autocomplete="off" placeholder="Ajustar: mais editorial, troque só a paleta…" aria-label="Pedido de ajuste"><button class="pill sm" type="submit">Ajustar</button></form>
         <div class="gens" id="stGens" aria-label="Gerações anteriores"></div>

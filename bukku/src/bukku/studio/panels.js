@@ -6,6 +6,7 @@ import { MOCKUPS } from './mockups.js';
 import { imgURL, loadImage } from '../lib/store.js';
 import { artCanvas, hexRgb, makeCanvas, roundRect } from '../lib/util.js';
 import { BK } from '../brand/mark.js';
+import { boardNow, photoNow } from './imagery.js';
 
 /* ---------- imagens enviadas pelo cliente ---------- */
 const dims = (img) => [img.naturalWidth || img.width, img.naturalHeight || img.height];
@@ -351,7 +352,64 @@ async function drawPanel(k, b, c) {
       txt(cf.ls[0], 64, H - 73, bodyFont(b, cf.size, 700), R_.accent);
       break;
     }
+    case 'mundo': {
+      // foto do mundo da marca, gerada por IA, com a assinatura aplicada por cima
+      const ph = photoNow(b, 'mundo', 0);
+      if (ph) {
+        cover(g, ph, 0, 0, W, H);
+        const gr = g.createLinearGradient(0, 0, W * 0.7, 0);
+        gr.addColorStop(0, 'rgba(10,8,6,.72)'); gr.addColorStop(1, 'rgba(10,8,6,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, W, H);
+        symDraw(g, A, 'light', 64, H - 300, 120);
+        wordmark(g, b, 64, H - 110, W * 0.45, 96, R_.light);
+        const f = fit(g, b.tagline, W * 0.42, 2, (s) => bodyFont(b, s), 26, 16);
+        block(f, 66, H - 66, R_.light, 0.9);
+      } else {
+        // sem foto (ainda chegando, ou sem rede): cartaz com o símbolo grande e o padrão
+        bg(R_.dark);
+        tile(g, A.patLight, 0, 0, W, H, 90, 0.08);
+        g.save(); g.globalAlpha = 0.9; symDraw(g, A, varOn(R_.dark), W - 520, -40, 680); g.restore();
+        wordmark(g, b, 64, H - 150, W * 0.5, 110, R_.light);
+        const f = fit(g, b.tagline, W * 0.45, 2, (s) => bodyFont(b, s), 28, 16);
+        block(f, 66, H - 96, R_.light, 0.85);
+      }
+      break;
+    }
+    case 'prancha1': case 'prancha2': case 'prancha3': case 'prancha4': {
+      // prancha desenhada pela IA com o logo como referência; até chegar, um esboço da grade
+      const ph = boardNow(b, +k.slice(-1) - 1);
+      if (ph) { cover(g, ph, 0, 0, W, H); break; }
+      bg(R_.light);
+      const cols = 4, rows = 3, gap = 10, cw = (W - gap * (cols + 1)) / cols, ch = (H - gap * (rows + 1)) / rows;
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        g.fillStyle = b.palette[(r * cols + c + +k.slice(-1)) % 5].hex; g.globalAlpha = 0.18;
+        g.fillRect(gap + c * (cw + gap), gap + r * (ch + gap), cw, ch);
+      }
+      g.globalAlpha = 1;
+      symDraw(g, A, 'pos', W / 2 - 70, H / 2 - 120, 140);
+      txt(b.prancha === 'falhou' ? 'a prancha não veio · gere de novo' : 'a IA está desenhando esta prancha…', W / 2, H / 2 + 70, bodyFont(b, 24), R_.dark, 'center', 0.75);
+      break;
+    }
     case 'foto': {
+      // sem chave a IA gratuita faz uma imagem só, já em grade; com chave, quatro fotos separadas
+      const col = photoNow(b, 'collage', 0);
+      const ph = col ? [] : [0, 1, 2, 3].map((i) => photoNow(b, 'foto', i));
+      if (col || ph.some(Boolean)) {
+        // moodboard: quatro fotos da IA, com as cores da paleta onde a foto ainda não chegou
+        bg(R_.light);
+        if (col) cover(g, col, 0, 0, W, H);
+        const gap = 8, cw = (W - gap * 3) / 2, ch = (H - gap * 3) / 2;
+        ph.forEach((im, i) => {
+          const x = gap + (i % 2) * (cw + gap), y = gap + Math.floor(i / 2) * (ch + gap);
+          if (im) cover(g, im, x, y, cw, ch); else { g.fillStyle = b.palette[i % 5].hex; g.fillRect(x, y, cw, ch); }
+        });
+        const gr = g.createLinearGradient(0, H * 0.6, 0, H);
+        gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(20,14,10,.8)');
+        g.fillStyle = gr; g.fillRect(0, 0, W, H);
+        const f = fit(g, b.photo, W - 80, 3, (s) => bodyFont(b, s), 22, 14);
+        block(f, 40, H - 36 - (f.ls.length - 1) * f.lh, '#fbf6ef');
+        break;
+      }
       if (A.uRef) cover(g, A.uRef, 0, 0, W, H);
       else g.drawImage(artCanvas(W, H, [R_.primary, R_.accent, R_.second, R_.light], 1, shadeHex(R_.light, -0.05)), 0, 0);
       const gr = g.createLinearGradient(0, H * 0.45, 0, H);
