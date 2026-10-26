@@ -6,7 +6,7 @@ import { MOCKUPS } from './mockups.js';
 import { imgURL, loadImage } from '../lib/store.js';
 import { artCanvas, hexRgb, makeCanvas, roundRect } from '../lib/util.js';
 import { BK } from '../brand/mark.js';
-import { photoNow } from './imagery.js';
+import { boardNow, photoNow } from './imagery.js';
 
 /* ---------- imagens enviadas pelo cliente ---------- */
 const dims = (img) => [img.naturalWidth || img.width, img.naturalHeight || img.height];
@@ -375,10 +375,19 @@ async function drawPanel(k, b, c) {
       }
       break;
     }
-    case 'prancha': {
-      const ph = photoNow(b, 'prancha', 0);
-      if (ph) cover(g, ph, 0, 0, W, H);
-      else { bg(R_.light); tile(g, A.pat, 0, 0, W, H, 80, 0.15); txt('a prancha da IA está sendo montada…', W / 2, H / 2, bodyFont(b, 22), R_.dark, 'center', 0.7); }
+    case 'prancha1': case 'prancha2': case 'prancha3': case 'prancha4': {
+      // prancha desenhada pela IA com o logo como referência; até chegar, um esboço da grade
+      const ph = boardNow(b, +k.slice(-1) - 1);
+      if (ph) { cover(g, ph, 0, 0, W, H); break; }
+      bg(R_.light);
+      const cols = 4, rows = 3, gap = 10, cw = (W - gap * (cols + 1)) / cols, ch = (H - gap * (rows + 1)) / rows;
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        g.fillStyle = b.palette[(r * cols + c + +k.slice(-1)) % 5].hex; g.globalAlpha = 0.18;
+        g.fillRect(gap + c * (cw + gap), gap + r * (ch + gap), cw, ch);
+      }
+      g.globalAlpha = 1;
+      symDraw(g, A, 'pos', W / 2 - 70, H / 2 - 120, 140);
+      txt(b.prancha === 'falhou' ? 'a prancha não veio · gere de novo' : 'a IA está desenhando esta prancha…', W / 2, H / 2 + 70, bodyFont(b, 24), R_.dark, 'center', 0.75);
       break;
     }
     case 'foto': {

@@ -20,7 +20,55 @@ const TEXT_MODELS = {
 };
 const IMG_MODELS = { quick: 'zimage', default: 'flux', complex: 'gpt-image' };
 
-function getKey() { try { return (localStorage.getItem(KEY_LS) || '').trim(); } catch (e) { return ''; } }
+function getKey() {
+  try { return (sessionStorage.getItem(KEY_SS) || localStorage.getItem(KEY_LS) || '').trim(); } catch (e) { return ''; }
+}
+
+/* ---------- Conectar Pollinations (OAuth com PKCE, sem servidor) ----------
+ * A pessoa entra com a conta dela e autoriza o BUKKU a gastar o Pollen gratuito
+ * dela; a chave volta para esta aba e fica só no sessionStorage, como pede a
+ * documentação. APP_KEY é a chave publicável do app (pk_), criada em
+ * enter.pollinations.ai > Apps, com o endereço do BUKKU como Redirect URI.
+ * O fluxo exige essa chave: enquanto ela estiver vazia, o botão fica escondido e
+ * a pessoa ainda pode colar uma chave sk_ na ficha. */
+const APP_KEY = '';
+const canConnect = () => !!APP_KEY;
+const KEY_SS = 'bukku.pollen.session';
+const AUTH = 'https://enter.pollinations.ai/authorize';
+const TOKEN = 'https://enter.pollinations.ai/api/oauth/token';
+const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const redirectURI = () => location.origin + location.pathname;
+async function connectPollinations() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
+  sessionStorage.setItem('bukku.oauth', JSON.stringify({ verifier, state }));
+  const q = new URLSearchParams({ response_type: 'code', redirect_uri: redirectURI(), scope: 'usage', models: 'image,text', expiry: '30', budget: '20', state, code_challenge: challenge, code_challenge_method: 'S256' });
+  if (APP_KEY) q.set('client_id', APP_KEY);
+  location.href = AUTH + '?' + q;
+}
+/** Na volta do consentimento: troca o código pela chave e limpa o endereço. Devolve true se conectou. */
+async function finishConnect() {
+  const u = new URL(location.href);
+  const code = u.searchParams.get('code'), state = u.searchParams.get('state');
+  if (!code) return false;
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem('bukku.oauth') || 'null'); } catch (e) {}
+  ['code', 'state', 'error', 'error_description'].forEach((k) => u.searchParams.delete(k));
+  history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+  if (!saved || saved.state !== state) return false;
+  sessionStorage.removeItem('bukku.oauth');
+  const body = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectURI(), code_verifier: saved.verifier });
+  if (APP_KEY) body.set('client_id', APP_KEY);
+  const r = await fetch(TOKEN, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+  if (!r.ok) return false;
+  const j = await r.json();
+  if (!j.access_token) return false;
+  sessionStorage.setItem(KEY_SS, j.access_token);
+  return true;
+}
+function disconnect() { try { sessionStorage.removeItem(KEY_SS); localStorage.removeItem(KEY_LS); } catch (e) {} }
+const connectedBySession = () => { try { return !!sessionStorage.getItem(KEY_SS); } catch (e) { return false; } };
 function setKey(k) { try { if (k) localStorage.setItem(KEY_LS, k.trim()); else localStorage.removeItem(KEY_LS); } catch (e) {} }
 const auth = (k) => (k ? { Authorization: 'Bearer ' + k } : {});
 const wait = (ms, signal) => new Promise((res, rej) => {
@@ -162,6 +210,55 @@ function aiImage(prompt, opts = {}) {
   return p;
 }
 
+/* ---------- pranchas com o logo como referência (só com chave) ----------
+ * /v1/images/edits recebe o logo renderizado como imagem de referência, então o
+ * modelo desenha cada peça com o mesmo símbolo, como os geradores de brand kit pagos. */
+const EDIT_URL = 'https://gen.pollinations.ai/v1/images/edits';
+const BOARD_MODELS = { quick: ['gpt-image', 'kontext'], default: ['gpt-image', 'kontext'], complex: ['gpt-image-2', 'gpt-image', 'kontext'] };
+const BOARD_Q = { quick: 'low', default: 'medium', complex: 'high' };
+const boards = new Map();
+const peekBoard = (id) => boards.get(id) || null;
+function aiBoard(id, prompt, refDataURL, { quality = 'default', size = '1536x1024', seed = 1, signal } = {}) {
+  if (boards.has(id)) return Promise.resolve(boards.get(id));
+  const key = getKey();
+  if (!key) return Promise.reject(Object.assign(new Error('sem chave'), { code: 'no_key' }));
+  return (async () => {
+    await slot();
+    try {
+      let last = null;
+      for (const model of BOARD_MODELS[quality] || BOARD_MODELS.default) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (signal?.aborted) throw abortErr();
+          const t = timed(signal, 240000);
+          try {
+            const r = await fetch(EDIT_URL, {
+              method: 'POST', signal: t.signal,
+              headers: { 'Content-Type': 'application/json', ...auth(key) },
+              body: JSON.stringify({ model, prompt, image: [{ image_url: refDataURL }], size, quality: BOARD_Q[quality] || 'medium', seed, response_format: 'b64_json' }),
+            });
+            const ra = await retryAfter(r);
+            if (ra || r.status >= 500) { await wait(ra || 6000 * (attempt + 1), signal); continue; }
+            if (r.status === 401 || r.status === 403) throw Object.assign(new Error('key'), { code: 'bad_key' });
+            if (!r.ok) { last = Object.assign(new Error('http ' + r.status), { code: r.status === 402 ? 'no_pollen' : 'http' }); break; }
+            const j = await r.json();
+            const d = j?.data?.[0];
+            const src = d?.b64_json ? 'data:image/png;base64,' + d.b64_json : d?.url;
+            if (!src) { last = Object.assign(new Error('vazio'), { code: 'http' }); break; }
+            const img = await new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
+            boards.set(id, img);
+            return img;
+          } catch (e) {
+            if (signal?.aborted) throw abortErr();
+            if (e?.code === 'bad_key') throw e;
+            last = e;
+          } finally { t.done(); }
+        }
+      }
+      throw last || Object.assign(new Error('falhou'), { code: 'http' });
+    } finally { release(); }
+  })();
+}
+
 /** Testa rápido se a Pollinations responde deste navegador (no claude.ai a página não alcança a rede). */
 let reachP = null;
 function freeAIReachable() {
@@ -174,4 +271,4 @@ function freeAIReachable() {
   return reachP;
 }
 
-export { aiImage, freeAIReachable, getKey, imageURL, parseJSON, peekImage, setKey, textJSON };
+export { canConnect, connectPollinations, connectedBySession, disconnect, finishConnect, aiBoard, aiImage, freeAIReachable, getKey, imageURL, parseJSON, peekBoard, peekImage, setKey, textJSON };

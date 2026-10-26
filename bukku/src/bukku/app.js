@@ -6,8 +6,8 @@ import { bodyFont, cover, dispFont, drawPanel, lines, prepare, symDraw, tile, wo
 import { APPS, PANEL_INFO, PANEL_SIZE, buildPrompt, kitKinds, localBrand, normalizeBrand } from './studio/brand.js';
 import { cmyk, harmonyPalette, hsl2hex, inkOn, luma, paletteFromImage, rolesOf, slugify } from './studio/color.js';
 import { colorize, sizeSVG } from './studio/svg.js';
-import { freeAIReachable, getKey, setKey, textJSON } from './studio/ai.js';
-import { loadPhotos } from './studio/imagery.js';
+import { canConnect, connectPollinations, connectedBySession, disconnect, finishConnect, freeAIReachable, getKey, setKey, textJSON } from './studio/ai.js';
+import { BOARD_N, loadBoards, loadPhotos } from './studio/imagery.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -596,9 +596,9 @@ async function closePaint(){if(pDirty)await savePainting();$('#paint').classList
 $('#pClose').onclick=closePaint;
 
 /* ================= brand studio (phase 2) ================= */
-const KNOBS=['fut','sat','geo','fun','tex','mov'];
+const KNOBS=['fut','sat','geo','tex','ene','fun','lux','ous','tip','mov'];
 const STU={proj:null,inp:null,brand:null,gens:[],busy:false,ctl:null,files:{},canv:{}};
-const blankInputs=()=>({name:'',briefing:'',colors:[],style:{fut:50,sat:50,geo:50,fun:50,tex:50,mov:50},apps:[],quality:'default',imgs:{symbol:null,wordmark:null,ref:null}});
+const blankInputs=()=>({name:'',briefing:'',colors:[],style:{fut:50,sat:50,geo:50,tex:50,ene:50,fun:50,lux:50,ous:50,tip:50,mov:50},apps:[],quality:'default',imgs:{symbol:null,wordmark:null,ref:null}});
 function setSlot(s,url){const el=document.querySelector(`.slot[data-slot="${s}"]`);el.style.backgroundImage=url?`url("${url}")`:'';el.classList.toggle('has',!!url);}
 function renderColors(){const box=$('#fColors');box.textContent='';const cs=STU.inp.colors;
   if(!cs.length){const s=document.createElement('span');s.className='swauto';s.textContent='a IA escolhe as cores';box.append(s);}
@@ -637,13 +637,16 @@ function loadScript(src){return new Promise((res,rej)=>{const s=document.createE
 async function renderBoard(){const b=STU.brand;const grid=$('#stGrid');grid.textContent='';grid.style.gridAutoFlow='dense';$('#stEmpty').hidden=!!b||STU.busy;$('#stKitH').hidden=!b;$('#stRefine').hidden=!b;$('#stZip').disabled=$('#stPdf').disabled=!b;STU.canv={};renderGens();if(!b)return;
   $('#stKitT').textContent=b.name;$('#stKitS').textContent=(b.ai?'gerado com IA'+(b.engine?' ('+b.engine+')':''):'versão base, sem IA')+' · '+b.fonts.display+' + '+b.fonts.body;
   for(const k of kitKinds(b)){const [W,H]=PANEL_SIZE(k);const card=document.createElement('figure');card.className='panel'+(W>H?' w2':'');card.style.margin='0';const c=document.createElement('canvas');c.width=W;c.height=H;c.setAttribute('role','img');c.setAttribute('aria-label',PANEL_INFO[k][0]+' da marca '+b.name);
-    const lb=document.createElement('span');lb.className='lbl2';lb.textContent=PANEL_INFO[k][0];const ex=document.createElement('button');ex.type='button';ex.className='ext';ex.textContent='extrair';ex.setAttribute('aria-label','Extrair '+PANEL_INFO[k][0]);ex.onclick=()=>extract(k);card.append(c,lb,ex);grid.append(card);STU.canv[k]=c;}
+    const lb=document.createElement('span');lb.className='lbl2';lb.textContent=PANEL_INFO[k][0];const ex=document.createElement('button');ex.type='button';ex.className='ext';ex.textContent='extrair';ex.setAttribute('aria-label','Extrair '+PANEL_INFO[k][0]);ex.onclick=()=>extract(k);card.append(c,lb,ex);let box=grid;if(/^prancha/.test(k)){box=grid.querySelector('.boards');if(!box){box=document.createElement('div');box.className='boards';grid.append(box);}card.classList.remove('w2');}box.append(card);STU.canv[k]=c;}
   for(const k of Object.keys(STU.canv)){try{await drawPanel(k,b,STU.canv[k]);}catch(e){console.warn('painel',k,e);}}
   shootWorld(b);}
+/* logo limpo, em fundo branco, para a IA usar como referência nas pranchas */
+async function logoRef(b){const A=await prepare(b);return makeCanvas(1024,1024,g=>{g.fillStyle='#ffffff';g.fillRect(0,0,1024,1024);symDraw(g,A,'pos',332,140,360);wordmark(g,b,512,800,860,150,A.R.dark,'center');}).toDataURL('image/png');}
 /* mundo da marca: fotos da IA gratuita chegam aos poucos e os painéis se redesenham */
-async function shootWorld(b){if(!await freeAIReachable()||STU.brand!==b)return;const jobs=[['mundo','mundo',1],getKey()?['foto','foto',4]:['foto','collage',1],['prancha','prancha',1]].filter(([k])=>STU.canv[k]);if(!jobs.length)return;
-  const total=jobs.reduce((a,j)=>a+j[2],0);let got=0,failed=0;const st=$('#stKitW');const show=()=>{if(STU.brand!==b)return;st.hidden=got+failed>=total;st.textContent=`fotografando o mundo da marca · ${got}/${total}`+(getKey()?'':' · a IA gratuita sem chave faz uma foto a cada 45 s');};show();
-  await Promise.all(jobs.map(([k,kind,n])=>loadPhotos(b,kind,n,async()=>{got++;show();if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}}).then(rs=>{failed+=rs.filter(r=>r.status==='rejected').length;show();})));
+async function shootWorld(b){if(!await freeAIReachable()||STU.brand!==b)return;const jobs=[['mundo','mundo',1],getKey()?['foto','foto',4]:['foto','collage',1]].filter(([k])=>STU.canv[k]);const boards=b.prancha&&getKey()&&STU.canv.prancha1;if(!jobs.length&&!boards)return;
+  const total=jobs.reduce((a,j)=>a+j[2],0)+(boards?BOARD_N:0);let got=0,failed=0;const st=$('#stKitW');const show=()=>{if(STU.brand!==b)return;st.hidden=got+failed>=total;st.textContent=(boards?`desenhando as pranchas e fotografando o mundo da marca · ${got}/${total}`:`fotografando o mundo da marca · ${got}/${total}`)+(getKey()?'':' · a IA gratuita sem chave faz uma foto a cada 45 s');};show();
+  const boardJob=boards?logoRef(b).then(ref=>loadBoards(b,ref,async i=>{got++;show();const k='prancha'+(i+1);if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}})).then(rs=>{const bad=rs.filter(r=>r.status==='rejected');failed+=bad.length;show();if(bad.length===BOARD_N&&STU.brand===b){const c=bad[0].reason&&bad[0].reason.code;b.prancha='falhou';['prancha1','prancha2','prancha3','prancha4'].forEach(k=>STU.canv[k]&&drawPanel(k,b,STU.canv[k]).catch(()=>{}));toast(c==='bad_key'?'Chave recusada':c==='no_pollen'?'Sem Pollen na conta':'As pranchas não vieram',c==='no_pollen'?'O saldo gratuito da Pollinations acabou por hoje. As missões da conta liberam mais.':'Gere de novo daqui a pouco.');}}):null;
+  await Promise.all([boardJob,...jobs.map(([k,kind,n])=>loadPhotos(b,kind,n,async()=>{got++;show();if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}}).then(rs=>{failed+=rs.filter(r=>r.status==='rejected').length;show();}))]);
   if(failed&&STU.brand===b)toast('Algumas fotos não vieram','O serviço gratuito está cheio. Abra o projeto de novo daqui a pouco para completar.');}
 function renderGens(){const box=$('#stGens');box.textContent='';if(STU.gens.length<2&&!(STU.gens.length===1&&STU.gens[0].brand!==STU.brand))return;
   STU.gens.forEach((gn,i)=>{const b=document.createElement('button');b.type='button';b.className='gthumb'+(gn.brand===STU.brand?' on':'');b.setAttribute('aria-label','Voltar para a geração '+(STU.gens.length-i));
@@ -683,8 +686,12 @@ $('#stRefine').addEventListener('submit',e=>{e.preventDefault();const t=$('#fRef
 $('#stStop').onclick=()=>{if(STU.ctl)STU.ctl.abort();};
 /* qual IA o estúdio está usando, e a chave opcional da Pollinations */
 async function showEngine(){const el=$('#fEngine');const sm=await getSample();if(sm){el.textContent='IA: Claude, pelo claude.ai.';return;}
-  const ok=await freeAIReachable();el.textContent=ok?(getKey()?'IA: gratuita, Pollinations com a sua chave.':'IA: gratuita, Pollinations sem cadastro. Texto, símbolo e fotos do mundo da marca.'):'IA: offline. O estúdio gera a versão base no próprio navegador.';}
-$('#fKey').value=getKey();$('#fKeySave').onclick=()=>{setKey($('#fKey').value);toast($('#fKey').value.trim()?'Chave salva':'Chave apagada',$('#fKey').value.trim()?'As próximas gerações usam os modelos da sua conta Pollinations.':'O estúdio volta para a IA gratuita sem cadastro.');showEngine();};
+  const ok=await freeAIReachable();const k=getKey();$('#fConnect').hidden=!ok||!!k||!canConnect();$('#fDisconnect').hidden=!k;
+  el.textContent=ok?(k?'IA: Pollinations conectada. Marca, fotos e as 4 pranchas com o seu logo.':'IA: gratuita, Pollinations sem cadastro. Texto, símbolo e fotos do mundo da marca.'):'IA: offline. O estúdio gera a versão base no próprio navegador.';}
+$('#fConnect').onclick=()=>connectPollinations().catch(()=>toast('Não deu para abrir a Pollinations','Tente de novo ou cole uma chave abaixo.'));
+$('#fDisconnect').onclick=()=>{disconnect();$('#fKey').value='';toast('Pollinations desconectada','O estúdio volta para a IA gratuita sem cadastro.');showEngine();};
+finishConnect().then(ok=>{if(ok){toast('Pollinations conectada','Abra um caderno e gere a marca: agora saem também as 4 pranchas.');showEngine();}}).catch(()=>toast('A conexão não terminou','Tente conectar de novo.'));
+$('#fKey').value=connectedBySession()?'':getKey();$('#fKeySave').onclick=()=>{setKey($('#fKey').value);toast($('#fKey').value.trim()?'Chave salva':'Chave apagada',$('#fKey').value.trim()?'As próximas gerações usam os modelos da sua conta Pollinations.':'O estúdio volta para a IA gratuita sem cadastro.');showEngine();};
 showEngine();
 /* extract & export */
 const innerSVG=s=>String(s).replace(/^<svg[^>]*>/,'').replace(/<\/svg>\s*$/,'');
@@ -714,7 +721,7 @@ async function zipKit(){const b=STU.brand;if(!b)return;const btn=$('#stZip');btn
     add('colors/paleta.json',JSON.stringify(b.palette.map(c=>({nome:c.name,funcao:c.role,hex:c.hex,rgb:hexRgb(c.hex),cmyk:cmyk(c.hex)})),null,2),{formato:'JSON',descricao:'Paleta com HEX, RGB e CMYK'});
     add('typography/fontes.txt',`Títulos: ${b.fonts.display}\nhttps://fonts.google.com/specimen/${b.fonts.display.replace(/ /g,'+')}\n\nTexto: ${b.fonts.body}\nhttps://fonts.google.com/specimen/${b.fonts.body.replace(/ /g,'+')}\n\nAmbas com licença aberta do Google Fonts.`,{formato:'TXT',descricao:'Famílias tipográficas e links'});
     for(const k of Object.keys(STU.canv)){const cv=STU.canv[k];const folder=['capa','logo','lockup','paleta','tipografia','padrao','icones','voz'].includes(k)?'brand-assets':k==='foto'||k==='mundo'?'moodboards':'applications';add(`${folder}/${k}.png`,await png(cv),{formato:'PNG',dimensoes:`${cv.width}x${cv.height}`,transparencia:false,descricao:'Página de identidade: '+PANEL_INFO[k][0]});}
-    const board=packBoard(Object.keys(STU.canv));add('moodboards/prancha.png',await png(board),{formato:'PNG',dimensoes:`${board.width}x${board.height}`,transparencia:false,descricao:'Prancha com todas as páginas do kit'});
+    const board=packBoard(Object.keys(STU.canv).filter(k=>!/^prancha/.test(k)));add('moodboards/prancha.png',await png(board),{formato:'PNG',dimensoes:`${board.width}x${board.height}`,transparencia:false,descricao:'Prancha com todas as páginas do kit'});
     add('documentation/conceito.txt',`${b.name}\n${b.tagline}\n\n${b.concept}\n\nPalavras-chave: ${b.keywords.join(', ')}\nFotografia: ${b.photo}\nVoz: ${b.voice.headline} / ${b.voice.slogans.join(' / ')}`,{formato:'TXT',descricao:'Conceito e voz da marca'});
     z.file('documentation/manifest.json',JSON.stringify({marca:b.name,gerado_em:new Date().toISOString(),origem:b.ai?'BUKKU + IA':'BUKKU (versão base)',arquivos:man},null,2));
     const blob=await z.generateAsync({type:'blob'});if(await saveFile(slug+'-kit-de-marca.zip',blob))toast('Kit salvo','Logos, padrão, ícones, cores, tipografia e manifesto em pastas.');}

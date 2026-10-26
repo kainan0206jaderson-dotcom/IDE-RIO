@@ -287,3 +287,5 @@ label.pill{cursor:pointer}
 .kit-h .kitw::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;animation:kitw 1.2s ease-in-out infinite}
 @keyframes kitw{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.kit-h .kitw::before{animation:none}}
+.kit .boards{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:640px){.kit .boards{grid-template-columns:1fr}}
