@@ -21,7 +21,9 @@ const route = () => { const k = getKey(); return k ? { base: GEN, headers: auth(
 /** true quando há modelos melhores disponíveis (chave própria ou ponte). */
 const hasGen = () => !!route();
 /** Ponte fora do ar ou sem chave configurada: desliga e segue com a IA gratuita. */
-const proxyFailed = (r) => !getKey() && PROXY && !proxyOff && (r.status === 403 || r.status >= 500) && (proxyOff = true);
+const proxyFailed = (r) => !getKey() && PROXY && !proxyOff && (r.status === 402 || r.status === 403 || r.status >= 500) && (proxyOff = true);
+// sem saldo, a Pollinations responde 200 com um aviso no lugar da resposta
+const NO_CREDITS = /enough credits|top up|complete a quest/i;
 // modelos por qualidade; a lista cai para o próximo se um não responder
 const TEXT_MODELS = {
   quick: ['openai', 'openai-fast'],
@@ -154,7 +156,12 @@ async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
         if (r.status === 401 || r.status === 403) { last = Object.assign(new Error('key'), { code: 'bad_key' }); break; }
         if (!r.ok) { last = Object.assign(new Error('http ' + r.status), { code: 'http' }); break; }
         const j = await r.json();
-        const out = parseJSON(j?.choices?.[0]?.message?.content);
+        const said = j?.choices?.[0]?.message?.content;
+        if (gen && typeof said === 'string' && NO_CREDITS.test(said) && !said.includes('{')) {
+          if (!getKey() && !proxyOff) { proxyOff = true; return textJSON(prompt, { quality, signal, onPhase }); }
+          last = Object.assign(new Error('sem saldo'), { code: 'no_pollen' }); break;
+        }
+        const out = parseJSON(said);
         if (out) return out;
         last = Object.assign(new Error('json'), { code: 'invalid_json' });
       } catch (e) {
@@ -163,7 +170,7 @@ async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
         last = Object.assign(e instanceof Error ? e : new Error(String(e)), { code: e?.code || 'network' });
       } finally { t.done(); }
     }
-    if (last?.code === 'bad_key') break;
+    if (last?.code === 'bad_key' || last?.code === 'no_pollen') break;
   }
   throw last || Object.assign(new Error('falhou'), { code: 'network' });
 }
@@ -233,7 +240,17 @@ const BOARD_MODELS = { quick: ['gpt-image', 'kontext'], default: ['gpt-image', '
 const BOARD_Q = { quick: 'low', default: 'medium', complex: 'high' };
 const boards = new Map();
 const peekBoard = (id) => boards.get(id) || null;
-function aiBoard(id, prompt, refDataURL, { quality = 'default', size = '1536x1024', seed = 1, signal } = {}) {
+/** Prancha que veio quase lisa (quadros vazios): melhor pedir de novo. */
+function blankish(img) {
+  try {
+    const c = document.createElement('canvas'); c.width = c.height = 48;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, 48, 48);
+    const d = g.getImageData(0, 0, 48, 48).data; let sum = 0, sq = 0; const n = d.length / 4;
+    for (let i = 0; i < d.length; i += 4) { const y = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; sum += y; sq += y * y; }
+    return Math.sqrt(sq / n - (sum / n) ** 2) < 22;
+  } catch (e) { return false; }
+}
+function aiBoard(id, prompt, refs, { quality = 'default', size = '1536x1024', seed = 1, signal } = {}) {
   if (boards.has(id)) return Promise.resolve(boards.get(id));
   const gen = route();
   if (!gen) return Promise.reject(Object.assign(new Error('sem chave'), { code: 'no_key' }));
@@ -249,7 +266,7 @@ function aiBoard(id, prompt, refDataURL, { quality = 'default', size = '1536x102
             const r = await fetch(gen.base + '/v1/images/edits', {
               method: 'POST', signal: t.signal,
               headers: { 'Content-Type': 'application/json', ...gen.headers },
-              body: JSON.stringify({ model, prompt, image: [{ image_url: refDataURL }], size, quality: BOARD_Q[quality] || 'medium', seed, response_format: 'b64_json' }),
+              body: JSON.stringify({ model, prompt, image: [].concat(refs).map((u) => ({ image_url: u })), size, quality: BOARD_Q[quality] || 'medium', seed, response_format: 'b64_json' }),
             });
             const ra = await retryAfter(r);
             if (ra < 0 || proxyFailed(r)) throw Object.assign(new Error('cota'), { code: 'no_pollen' });
@@ -261,6 +278,7 @@ function aiBoard(id, prompt, refDataURL, { quality = 'default', size = '1536x102
             const src = d?.b64_json ? 'data:image/' + (d.b64_json.startsWith('/9j/') ? 'jpeg' : 'png') + ';base64,' + d.b64_json : d?.url;
             if (!src) { last = Object.assign(new Error('vazio'), { code: 'http' }); break; }
             const img = await new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
+            if (blankish(img) && attempt < 2) { last = Object.assign(new Error('vazia'), { code: 'http' }); seed += 1000; continue; }
             boards.set(id, img);
             return img;
           } catch (e) {

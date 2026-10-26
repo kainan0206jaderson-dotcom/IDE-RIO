@@ -156,7 +156,7 @@ const markup = String.raw`<canvas id="gl" tabindex="0" aria-label="Escritório d
           </div>
           <p class="note" id="fEngine">IA: verificando…</p>
           <div class="row"><button type="button" class="mini" id="fConnect">conectar Pollinations (grátis)</button><button type="button" class="mini" id="fDisconnect" hidden>desconectar</button></div>
-          <p class="note">Sem conta a IA gratuita já escreve a marca e faz fotos. Com uma conta Pollinations (entra com o GitHub e usa o Pollen grátis das missões), o estúdio desenha também as 4 pranchas com o seu logo.</p>
+          <p class="note" id="fConnectNote">Com uma conta Pollinations (entra com o GitHub e usa o Pollen grátis das missões), o estúdio desenha também as 4 pranchas com o seu logo.</p>
           <details class="keybox"><summary>colar uma chave da Pollinations</summary>
             <p class="note">Crie em <a href="https://enter.pollinations.ai/keys" target="_blank" rel="noopener">enter.pollinations.ai/keys</a>, de preferência com limite de gasto. Ela fica só neste navegador.</p>
             <div class="row"><input id="fKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk_…" aria-label="Chave da Pollinations"><button type="button" class="mini" id="fKeySave">salvar</button></div>

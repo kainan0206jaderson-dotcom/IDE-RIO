@@ -387,7 +387,7 @@ async function drawPanel(k, b, c) {
       }
       g.globalAlpha = 1;
       symDraw(g, A, 'pos', W / 2 - 70, H / 2 - 120, 140);
-      txt(b.prancha === 'falhou' ? 'a prancha não veio · gere de novo' : 'a IA está desenhando esta prancha…', W / 2, H / 2 + 70, bodyFont(b, 24), R_.dark, 'center', 0.75);
+      txt(b.prancha === 'falhou' ? 'a prancha não veio · gere de novo' : 'preparando esta prancha…', W / 2, H / 2 + 70, bodyFont(b, 24), R_.dark, 'center', 0.75);
       break;
     }
     case 'foto': {
