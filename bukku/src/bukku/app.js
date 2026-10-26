@@ -641,9 +641,9 @@ async function renderBoard(){const b=STU.brand;const grid=$('#stGrid');grid.text
   for(const k of Object.keys(STU.canv)){try{await drawPanel(k,b,STU.canv[k]);}catch(e){console.warn('painel',k,e);}}
   shootWorld(b);}
 /* mundo da marca: fotos da IA gratuita chegam aos poucos e os painéis se redesenham */
-async function shootWorld(b){if(!await freeAIReachable()||STU.brand!==b)return;const jobs=[['mundo',1],['foto',4]].filter(([k])=>STU.canv[k]);if(!jobs.length)return;
-  const total=jobs.reduce((a,[,n])=>a+n,0);let got=0,failed=0;const st=$('#stKitW');const show=()=>{if(STU.brand!==b)return;st.hidden=got+failed>=total;st.textContent=`fotografando o mundo da marca · ${got}/${total}`;};show();
-  await Promise.all(jobs.map(([k,n])=>loadPhotos(b,k,n,async()=>{got++;show();if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}}).then(rs=>{failed+=rs.filter(r=>r.status==='rejected').length;show();})));
+async function shootWorld(b){if(!await freeAIReachable()||STU.brand!==b)return;const jobs=[['mundo','mundo',1],getKey()?['foto','foto',4]:['foto','collage',1],['prancha','prancha',1]].filter(([k])=>STU.canv[k]);if(!jobs.length)return;
+  const total=jobs.reduce((a,j)=>a+j[2],0);let got=0,failed=0;const st=$('#stKitW');const show=()=>{if(STU.brand!==b)return;st.hidden=got+failed>=total;st.textContent=`fotografando o mundo da marca · ${got}/${total}`+(getKey()?'':' · a IA gratuita sem chave faz uma foto a cada 45 s');};show();
+  await Promise.all(jobs.map(([k,kind,n])=>loadPhotos(b,kind,n,async()=>{got++;show();if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}}).then(rs=>{failed+=rs.filter(r=>r.status==='rejected').length;show();})));
   if(failed&&STU.brand===b)toast('Algumas fotos não vieram','O serviço gratuito está cheio. Abra o projeto de novo daqui a pouco para completar.');}
 function renderGens(){const box=$('#stGens');box.textContent='';if(STU.gens.length<2&&!(STU.gens.length===1&&STU.gens[0].brand!==STU.brand))return;
   STU.gens.forEach((gn,i)=>{const b=document.createElement('button');b.type='button';b.className='gthumb'+(gn.brand===STU.brand?' on':'');b.setAttribute('aria-label','Voltar para a geração '+(STU.gens.length-i));
@@ -665,8 +665,8 @@ async function generate(refine){if(STU.busy)return;readForm();const inp=STU.inp;
         else if(c==='refused'){toast('Pedido recusado','Reescreva o briefing e tente de novo.');return;}
         else if(c==='image_rejected'||c==='images_unavailable'){toast('Imagem não aceita','Troque a imagem ou gere sem ela.');return;}
         else{toast('A IA não respondeu','Tente de novo em instantes.');return;}}}
-    if(!brand&&await freeAIReachable()){const t0=Date.now();const tick=setInterval(()=>{$('#stProgT').textContent=`${refine?'ajustando':'escrevendo a marca'} com IA gratuita · ${Math.round((Date.now()-t0)/1000)}s`;},1000);
-      try{const raw=await textJSON(buildPrompt(inp,refine,STU.brand,0),{quality:inp.quality,signal:ctl.signal,onPhase:m=>{STU.engine='Pollinations · '+m;}});brand=normalizeBrand(raw,inp);brand.engine=STU.engine;}
+    if(!brand&&await freeAIReachable()){const t0=Date.now();let until=0;const tick=setInterval(()=>{const w=Math.ceil((until-Date.now())/1000);$('#stProgT').textContent=w>0?`na fila da IA gratuita · ${w}s`:`${refine?'ajustando':'escrevendo a marca'} com IA gratuita · ${Math.round((Date.now()-t0)/1000)}s`;},1000);
+      try{const raw=await textJSON(buildPrompt(inp,refine,STU.brand,0),{quality:inp.quality,signal:ctl.signal,onPhase:(m,w)=>{STU.engine='Pollinations · '+m;until=w?Date.now()+w:0;}});brand=normalizeBrand(raw,inp);brand.engine=STU.engine;}
       catch(e){const c=e&&e.code;if(c==='cancelled')return;
         if(c==='bad_key')toast('Chave recusada','A chave da Pollinations não vale. Apague ou troque em "IA" na ficha.');
         else if(c==='rate_limited')toast('IA gratuita cheia','Fiz uma versão base. Gere de novo em um minuto.');
@@ -674,7 +674,7 @@ async function generate(refine){if(STU.busy)return;readForm();const inp=STU.inp;
       finally{clearInterval(tick);}}
     if(sm&&brand&&!brand.engine)brand.engine='Claude';
     if(!brand){if(refine&&STU.brand){toast('Ajuste precisa da IA','Sem a IA, só dá para gerar uma versão base nova.');}brand=localBrand(inp);}
-    brand.apps=[...inp.apps];brand.user={...inp.imgs};STU.brand=brand;await renderBoard();
+    brand.apps=[...inp.apps];brand.user={...inp.imgs};if(getKey()&&await freeAIReachable())brand.prancha=true;STU.brand=brand;await renderBoard();
     const thumb=STU.canv.capa?makeCanvas(300,145,g=>g.drawImage(STU.canv.capa,0,0,300,145)).toDataURL('image/jpeg',.7):'';STU.gens.unshift({brand,inputs:JSON.parse(JSON.stringify(inp)),at:Date.now(),thumb});STU.gens=STU.gens.slice(0,4);renderGens();
     await saveProject();buzz([8,30,8]);if(refine)$('#fRefine').value='';if(innerWidth<760)$('#stBoard').scrollIntoView({behavior:REDUCED?'auto':'smooth'});}
   finally{STU.busy=false;btn.disabled=false;$('#stProg').hidden=true;if(!STU.brand)$('#stEmpty').hidden=false;}}

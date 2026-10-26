@@ -375,11 +375,20 @@ async function drawPanel(k, b, c) {
       }
       break;
     }
+    case 'prancha': {
+      const ph = photoNow(b, 'prancha', 0);
+      if (ph) cover(g, ph, 0, 0, W, H);
+      else { bg(R_.light); tile(g, A.pat, 0, 0, W, H, 80, 0.15); txt('a prancha da IA está sendo montada…', W / 2, H / 2, bodyFont(b, 22), R_.dark, 'center', 0.7); }
+      break;
+    }
     case 'foto': {
-      const ph = [0, 1, 2, 3].map((i) => photoNow(b, 'foto', i));
-      if (ph.some(Boolean)) {
+      // sem chave a IA gratuita faz uma imagem só, já em grade; com chave, quatro fotos separadas
+      const col = photoNow(b, 'collage', 0);
+      const ph = col ? [] : [0, 1, 2, 3].map((i) => photoNow(b, 'foto', i));
+      if (col || ph.some(Boolean)) {
         // moodboard: quatro fotos da IA, com as cores da paleta onde a foto ainda não chegou
         bg(R_.light);
+        if (col) cover(g, col, 0, 0, W, H);
         const gap = 8, cw = (W - gap * 3) / 2, ch = (H - gap * 3) / 2;
         ph.forEach((im, i) => {
           const x = gap + (i % 2) * (cw + gap), y = gap + Math.floor(i / 2) * (ch + gap);

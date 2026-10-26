@@ -29,6 +29,17 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 });
 const abortErr = () => Object.assign(new Error('cancelled'), { code: 'cancelled' });
 
+/** Sem chave a Pollinations libera uma resposta a cada 30 s por visitante e responde 402/429
+ *  com "Retry after Ns". Devolve quantos ms esperar, ou 0 se não for limite. */
+async function retryAfter(r) {
+  if (r.status !== 402 && r.status !== 429 && r.status !== 503) return 0;
+  let msg = '';
+  try { msg = await r.text(); } catch (e) {}
+  if (r.status !== 429 && !/FREE_LIMIT|limit|retry after/i.test(msg)) return 0;
+  const m = /retry after (\d+)\s*s/i.exec(msg) || [0, r.headers.get('retry-after')];
+  return Math.min(45, Math.max(3, +m[1] || 30)) * 1000 + 800;
+}
+
 /** Junta o sinal de quem chamou com um tempo limite. */
 function timed(signal, ms) {
   const ctl = new AbortController();
@@ -60,9 +71,9 @@ async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
   const tries = key ? TEXT_MODELS[quality] || TEXT_MODELS.default : ['openai'];
   let last = null;
   for (const model of tries) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       if (signal?.aborted) throw abortErr();
-      onPhase?.(model, attempt);
+      onPhase?.(model, 0);
       const t = timed(signal, quality === 'complex' ? 180000 : 120000);
       try {
         const r = await fetch(key ? GEN_TEXT : ANON_TEXT, {
@@ -73,9 +84,12 @@ async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
               { role: 'system', content: 'Você responde somente com um objeto JSON válido, sem texto antes ou depois.' },
               { role: 'user', content: prompt }],
             response_format: { type: 'json_object' }, seed: (Math.random() * 1e9) | 0,
+            // os modelos gratuitos raciocinam antes de responder; sem folga de tokens o JSON sai vazio
+            max_tokens: 9000, reasoning_effort: quality === 'complex' ? 'medium' : 'low',
           }),
         });
-        if (r.status === 429) { last = Object.assign(new Error('rate'), { code: 'rate_limited' }); await wait(6000 * (attempt + 1), signal); continue; }
+        const ra = await retryAfter(r);
+        if (ra) { last = Object.assign(new Error('rate'), { code: 'rate_limited' }); onPhase?.(model, ra); await wait(ra, signal); continue; }
         if (r.status === 401 || r.status === 403) { last = Object.assign(new Error('key'), { code: 'bad_key' }); break; }
         if (!r.ok) { last = Object.assign(new Error('http ' + r.status), { code: 'http' }); break; }
         const j = await r.json();
@@ -105,10 +119,10 @@ function slot() {
 function release() { running--; const next = queue.shift(); if (next) { running++; next(); } }
 
 /** Endereço da imagem; o mesmo texto, tamanho e semente dão sempre a mesma imagem. */
-function imageURL(prompt, { w = 1024, h = 1024, seed = 1, quality = 'default' } = {}) {
+function imageURL(prompt, { w = 1024, h = 1024, seed = 1, quality = 'default', model = null } = {}) {
   const key = getKey();
   const q = new URLSearchParams({ width: String(w), height: String(h), seed: String(seed), nologo: 'true' });
-  if (key) { q.set('model', IMG_MODELS[quality] || 'flux'); return GEN_IMG + encodeURIComponent(prompt) + '?' + q; }
+  if (key) { q.set('model', model || IMG_MODELS[quality] || 'flux'); return GEN_IMG + encodeURIComponent(prompt) + '?' + q; }
   q.set('model', 'flux');
   return ANON_IMG + encodeURIComponent(prompt) + '?' + q;
 }
@@ -124,12 +138,13 @@ function aiImage(prompt, opts = {}) {
   const p = (async () => {
     await slot();
     try {
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 4; attempt++) {
         if (opts.signal?.aborted) throw abortErr();
         const t = timed(opts.signal, 120000);
         try {
           const r = await fetch(url, { headers: auth(getKey()), signal: t.signal });
-          if (r.status === 429 || r.status >= 500) { await wait(5000 * (attempt + 1), opts.signal); continue; }
+          const ra = await retryAfter(r);
+          if (ra || r.status >= 500) { await wait(ra || 5000 * (attempt + 1), opts.signal); continue; }
           if (!r.ok) throw Object.assign(new Error('http ' + r.status), { code: 'http' });
           const blob = await r.blob();
           if (!/^image\//.test(blob.type)) throw Object.assign(new Error('não é imagem'), { code: 'http' });

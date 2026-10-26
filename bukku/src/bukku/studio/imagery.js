@@ -34,7 +34,7 @@ function styleFromKnobs(st) {
   return p.filter(Boolean).join(', ');
 }
 
-const SIZES = { foto: [768, 768], mundo: [1344, 640] };
+const SIZES = { foto: [768, 768], collage: [1024, 1024], mundo: [1344, 640], prancha: [1536, 1024] };
 const MAX = 4;
 
 /** As cenas da marca: as da IA, ou cenas montadas do briefing. */
@@ -51,23 +51,32 @@ function scenesOf(b) {
   ];
 }
 
-function photoPrompt(b, i) {
+function photoPrompt(b, i, kind) {
   const im = b.imagery || {};
   const pal = b.palette.slice(0, 4).map((c) => colorName(c.hex)).join(', ');
   const style = (typeof im.style === 'string' && im.style.trim()) || styleFromKnobs(b.style || {});
+  if (kind === 'prancha') {
+    // prancha de diretrizes no estilo dos geradores de brand kit: um modelo que escreve texto bem monta tudo numa imagem
+    const pals = b.palette.map((c) => c.hex.toUpperCase()).join(', ');
+    return `Premium brand guidelines board for the brand "${b.name}" (${b.tagline}). A clean 4x3 grid of tiles on a neutral background: cover with the wordmark "${b.name}" set in a ${b.fonts.display}-like typeface; logo and symbol tile; color palette tile with swatches ${pals} and their hex codes; typography tile showing "${b.fonts.display}" and "${b.fonts.body}"; icon set; graphic pattern; brand photography (${scenesOf(b)[0]}); t-shirt mockup; stationery set; packaging box; storefront signage; social media post. Every tile uses only this palette and the same symbol. Look: ${style}. Editorial, minimal, high-end studio presentation, crisp legible text.`;
+  }
+  if (kind === 'collage') {
+    const sc = scenesOf(b);
+    return `Editorial brand moodboard: a 2x2 grid of four separate photographs with thin off-white gutters. ${sc.map((x, j) => `(${j + 1}) ${x}`).join(' ')}. All four share one look: ${style}. Color palette dominated by ${pal}. No text, no letters, no logo, no watermark.`;
+  }
   return `${scenesOf(b)[i]}. ${style}. Color palette dominated by ${pal}. Professional editorial brand photography, art directed, natural light, high detail. No text, no letters, no logo, no watermark.`;
 }
 
 const seedOf = (b) => (b.imagery && b.imagery.seed) || (hashStr(b.name + '|' + (b.concept || '')) % 100000);
-function optsOf(b, kind, i) { const [w, h] = SIZES[kind]; return { w, h, seed: seedOf(b) + i, quality: b.quality || 'default' }; }
+function optsOf(b, kind, i) { const [w, h] = SIZES[kind]; return { w, h, seed: seedOf(b) + i, quality: b.quality || 'default', model: kind === 'prancha' ? 'gpt-image' : null }; }
 
 /** Imagem já baixada, ou null. */
-function photoNow(b, kind, i) { return peekImage(photoPrompt(b, i), optsOf(b, kind, i)); }
+function photoNow(b, kind, i) { return peekImage(photoPrompt(b, i, kind), optsOf(b, kind, i)); }
 
 /** Pede as fotos de um painel; chama onEach a cada uma que chega. */
 function loadPhotos(b, kind, n, onEach, signal) {
   return Promise.allSettled([...Array(n)].map((_, i) =>
-    aiImage(photoPrompt(b, i), { ...optsOf(b, kind, i), signal }).then((img) => { onEach?.(i, img); return img; })));
+    aiImage(photoPrompt(b, i, kind), { ...optsOf(b, kind, i), signal }).then((img) => { onEach?.(i, img); return img; })));
 }
 
 export { colorName, loadPhotos, photoNow, photoPrompt, scenesOf, styleFromKnobs };
