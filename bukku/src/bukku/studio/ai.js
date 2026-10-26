@@ -10,8 +10,16 @@
 const KEY_LS = 'bukku.pollen';
 const ANON_TEXT = 'https://text.pollinations.ai/openai';
 const ANON_IMG = 'https://image.pollinations.ai/prompt/';
-const GEN_TEXT = 'https://gen.pollinations.ai/v1/chat/completions';
-const GEN_IMG = 'https://gen.pollinations.ai/image/';
+const GEN = 'https://gen.pollinations.ai';
+/* Ponte do BUKKU (bukku/proxy/worker.js): um Cloudflare Worker que guarda a
+ * chave do dono, para que qualquer visitante use os modelos melhores sem entrar
+ * com conta. Vazio = sem ponte. A chave da própria pessoa, se houver, vem antes. */
+const PROXY = '';
+/** Para onde vão os pedidos com chave: a conta da pessoa ou a ponte. */
+let proxyOff = false; // a ponte avisou que este visitante usou a cota do dia
+const route = () => { const k = getKey(); return k ? { base: GEN, headers: auth(k) } : PROXY && !proxyOff ? { base: PROXY.replace(/\/$/, ''), headers: {} } : null; };
+/** true quando há modelos melhores disponíveis (chave própria ou ponte). */
+const hasGen = () => !!route();
 // modelos por qualidade; a lista cai para o próximo se um não responder
 const TEXT_MODELS = {
   quick: ['openai', 'openai-fast'],
@@ -83,6 +91,8 @@ async function retryAfter(r) {
   if (r.status !== 402 && r.status !== 429 && r.status !== 503) return 0;
   let msg = '';
   try { msg = await r.text(); } catch (e) {}
+  // cota diária da ponte: volta para a IA gratuita sem chave em vez de esperar
+  if (r.status === 429 && /"daily"/.test(msg)) { proxyOff = true; return -1; }
   if (r.status !== 429 && !/FREE_LIMIT|limit|retry after/i.test(msg)) return 0;
   const m = /retry after (\d+)\s*s/i.exec(msg) || [0, r.headers.get('retry-after')];
   return Math.min(45, Math.max(3, +m[1] || 30)) * 1000 + 800;
@@ -115,8 +125,8 @@ function parseJSON(text) {
 
 /** Pede um JSON à IA gratuita. Devolve o objeto ou lança um erro com code. */
 async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
-  const key = getKey();
-  const tries = key ? TEXT_MODELS[quality] || TEXT_MODELS.default : ['openai'];
+  const gen = route();
+  const tries = gen ? TEXT_MODELS[quality] || TEXT_MODELS.default : ['openai'];
   let last = null;
   for (const model of tries) {
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -124,9 +134,9 @@ async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
       onPhase?.(model, 0);
       const t = timed(signal, quality === 'complex' ? 180000 : 120000);
       try {
-        const r = await fetch(key ? GEN_TEXT : ANON_TEXT, {
+        const r = await fetch(gen ? gen.base + '/v1/chat/completions' : ANON_TEXT, {
           method: 'POST', signal: t.signal,
-          headers: { 'Content-Type': 'application/json', ...auth(key) },
+          headers: { 'Content-Type': 'application/json', ...(gen ? gen.headers : {}) },
           body: JSON.stringify({
             model, messages: [
               { role: 'system', content: 'Você responde somente com um objeto JSON válido, sem texto antes ou depois.' },
@@ -137,6 +147,7 @@ async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
           }),
         });
         const ra = await retryAfter(r);
+        if (ra < 0) return textJSON(prompt, { quality, signal, onPhase });
         if (ra) { last = Object.assign(new Error('rate'), { code: 'rate_limited' }); onPhase?.(model, ra); await wait(ra, signal); continue; }
         if (r.status === 401 || r.status === 403) { last = Object.assign(new Error('key'), { code: 'bad_key' }); break; }
         if (!r.ok) { last = Object.assign(new Error('http ' + r.status), { code: 'http' }); break; }
@@ -160,7 +171,7 @@ async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
 let running = 0;
 const queue = [];
 function slot() {
-  const max = getKey() ? 3 : 1;
+  const max = hasGen() ? 3 : 1;
   if (running < max) { running++; return Promise.resolve(); }
   return new Promise((res) => queue.push(res));
 }
@@ -168,9 +179,9 @@ function release() { running--; const next = queue.shift(); if (next) { running+
 
 /** Endereço da imagem; o mesmo texto, tamanho e semente dão sempre a mesma imagem. */
 function imageURL(prompt, { w = 1024, h = 1024, seed = 1, quality = 'default', model = null } = {}) {
-  const key = getKey();
+  const gen = route();
   const q = new URLSearchParams({ width: String(w), height: String(h), seed: String(seed), nologo: 'true' });
-  if (key) { q.set('model', model || IMG_MODELS[quality] || 'flux'); return GEN_IMG + encodeURIComponent(prompt) + '?' + q; }
+  if (gen) { q.set('model', model || IMG_MODELS[quality] || 'flux'); return gen.base + '/image/' + encodeURIComponent(prompt) + '?' + q; }
   q.set('model', 'flux');
   return ANON_IMG + encodeURIComponent(prompt) + '?' + q;
 }
@@ -185,13 +196,15 @@ function aiImage(prompt, opts = {}) {
   if (memo.has(url)) return memo.get(url);
   const p = (async () => {
     await slot();
+    let released = false;
     try {
       for (let attempt = 0; attempt < 4; attempt++) {
         if (opts.signal?.aborted) throw abortErr();
         const t = timed(opts.signal, 120000);
         try {
-          const r = await fetch(url, { headers: auth(getKey()), signal: t.signal });
+          const r = await fetch(url, { headers: route()?.headers || {}, signal: t.signal });
           const ra = await retryAfter(r);
+          if (ra < 0) { memo.delete(url); release(); released = true; return aiImage(prompt, opts); }
           if (ra || r.status >= 500) { await wait(ra || 5000 * (attempt + 1), opts.signal); continue; }
           if (!r.ok) throw Object.assign(new Error('http ' + r.status), { code: 'http' });
           const blob = await r.blob();
@@ -203,7 +216,7 @@ function aiImage(prompt, opts = {}) {
         } finally { t.done(); }
       }
       throw Object.assign(new Error('rate'), { code: 'rate_limited' });
-    } finally { release(); }
+    } finally { if (!released) release(); }
   })();
   memo.set(url, p);
   p.catch(() => memo.delete(url));
@@ -213,15 +226,14 @@ function aiImage(prompt, opts = {}) {
 /* ---------- pranchas com o logo como referência (só com chave) ----------
  * /v1/images/edits recebe o logo renderizado como imagem de referência, então o
  * modelo desenha cada peça com o mesmo símbolo, como os geradores de brand kit pagos. */
-const EDIT_URL = 'https://gen.pollinations.ai/v1/images/edits';
 const BOARD_MODELS = { quick: ['gpt-image', 'kontext'], default: ['gpt-image', 'kontext'], complex: ['gpt-image-2', 'gpt-image', 'kontext'] };
 const BOARD_Q = { quick: 'low', default: 'medium', complex: 'high' };
 const boards = new Map();
 const peekBoard = (id) => boards.get(id) || null;
 function aiBoard(id, prompt, refDataURL, { quality = 'default', size = '1536x1024', seed = 1, signal } = {}) {
   if (boards.has(id)) return Promise.resolve(boards.get(id));
-  const key = getKey();
-  if (!key) return Promise.reject(Object.assign(new Error('sem chave'), { code: 'no_key' }));
+  const gen = route();
+  if (!gen) return Promise.reject(Object.assign(new Error('sem chave'), { code: 'no_key' }));
   return (async () => {
     await slot();
     try {
@@ -231,12 +243,13 @@ function aiBoard(id, prompt, refDataURL, { quality = 'default', size = '1536x102
           if (signal?.aborted) throw abortErr();
           const t = timed(signal, 240000);
           try {
-            const r = await fetch(EDIT_URL, {
+            const r = await fetch(gen.base + '/v1/images/edits', {
               method: 'POST', signal: t.signal,
-              headers: { 'Content-Type': 'application/json', ...auth(key) },
+              headers: { 'Content-Type': 'application/json', ...gen.headers },
               body: JSON.stringify({ model, prompt, image: [{ image_url: refDataURL }], size, quality: BOARD_Q[quality] || 'medium', seed, response_format: 'b64_json' }),
             });
             const ra = await retryAfter(r);
+            if (ra < 0) throw Object.assign(new Error('cota'), { code: 'no_pollen' });
             if (ra || r.status >= 500) { await wait(ra || 6000 * (attempt + 1), signal); continue; }
             if (r.status === 401 || r.status === 403) throw Object.assign(new Error('key'), { code: 'bad_key' });
             if (!r.ok) { last = Object.assign(new Error('http ' + r.status), { code: r.status === 402 ? 'no_pollen' : 'http' }); break; }
@@ -249,7 +262,7 @@ function aiBoard(id, prompt, refDataURL, { quality = 'default', size = '1536x102
             return img;
           } catch (e) {
             if (signal?.aborted) throw abortErr();
-            if (e?.code === 'bad_key') throw e;
+            if (e?.code === 'bad_key' || e?.code === 'no_pollen') throw e;
             last = e;
           } finally { t.done(); }
         }
@@ -271,4 +284,4 @@ function freeAIReachable() {
   return reachP;
 }
 
-export { canConnect, connectPollinations, connectedBySession, disconnect, finishConnect, aiBoard, aiImage, freeAIReachable, getKey, imageURL, parseJSON, peekBoard, peekImage, setKey, textJSON };
+export { hasGen, canConnect, connectPollinations, connectedBySession, disconnect, finishConnect, aiBoard, aiImage, freeAIReachable, getKey, imageURL, parseJSON, peekBoard, peekImage, setKey, textJSON };

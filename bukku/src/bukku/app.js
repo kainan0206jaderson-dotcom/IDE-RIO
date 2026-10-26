@@ -6,7 +6,7 @@ import { bodyFont, cover, dispFont, drawPanel, lines, prepare, symDraw, tile, wo
 import { APPS, PANEL_INFO, PANEL_SIZE, buildPrompt, kitKinds, localBrand, normalizeBrand } from './studio/brand.js';
 import { cmyk, harmonyPalette, hsl2hex, inkOn, luma, paletteFromImage, rolesOf, slugify } from './studio/color.js';
 import { colorize, sizeSVG } from './studio/svg.js';
-import { canConnect, connectPollinations, connectedBySession, disconnect, finishConnect, freeAIReachable, getKey, setKey, textJSON } from './studio/ai.js';
+import { hasGen, canConnect, connectPollinations, connectedBySession, disconnect, finishConnect, freeAIReachable, getKey, setKey, textJSON } from './studio/ai.js';
 import { BOARD_N, loadBoards, loadPhotos } from './studio/imagery.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -643,8 +643,8 @@ async function renderBoard(){const b=STU.brand;const grid=$('#stGrid');grid.text
 /* logo limpo, em fundo branco, para a IA usar como referência nas pranchas */
 async function logoRef(b){const A=await prepare(b);return makeCanvas(1024,1024,g=>{g.fillStyle='#ffffff';g.fillRect(0,0,1024,1024);symDraw(g,A,'pos',332,140,360);wordmark(g,b,512,800,860,150,A.R.dark,'center');}).toDataURL('image/png');}
 /* mundo da marca: fotos da IA gratuita chegam aos poucos e os painéis se redesenham */
-async function shootWorld(b){if(!await freeAIReachable()||STU.brand!==b)return;const jobs=[['mundo','mundo',1],getKey()?['foto','foto',4]:['foto','collage',1]].filter(([k])=>STU.canv[k]);const boards=b.prancha&&getKey()&&STU.canv.prancha1;if(!jobs.length&&!boards)return;
-  const total=jobs.reduce((a,j)=>a+j[2],0)+(boards?BOARD_N:0);let got=0,failed=0;const st=$('#stKitW');const show=()=>{if(STU.brand!==b)return;st.hidden=got+failed>=total;st.textContent=(boards?`desenhando as pranchas e fotografando o mundo da marca · ${got}/${total}`:`fotografando o mundo da marca · ${got}/${total}`)+(getKey()?'':' · a IA gratuita sem chave faz uma foto a cada 45 s');};show();
+async function shootWorld(b){if(!await freeAIReachable()||STU.brand!==b)return;const jobs=[['mundo','mundo',1],hasGen()?['foto','foto',4]:['foto','collage',1]].filter(([k])=>STU.canv[k]);const boards=b.prancha&&hasGen()&&STU.canv.prancha1;if(!jobs.length&&!boards)return;
+  const total=jobs.reduce((a,j)=>a+j[2],0)+(boards?BOARD_N:0);let got=0,failed=0;const st=$('#stKitW');const show=()=>{if(STU.brand!==b)return;st.hidden=got+failed>=total;st.textContent=(boards?`desenhando as pranchas e fotografando o mundo da marca · ${got}/${total}`:`fotografando o mundo da marca · ${got}/${total}`)+(hasGen()?'':' · a IA gratuita sem chave faz uma foto a cada 45 s');};show();
   const boardJob=boards?logoRef(b).then(ref=>loadBoards(b,ref,async i=>{got++;show();const k='prancha'+(i+1);if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}})).then(rs=>{const bad=rs.filter(r=>r.status==='rejected');failed+=bad.length;show();if(bad.length===BOARD_N&&STU.brand===b){const c=bad[0].reason&&bad[0].reason.code;b.prancha='falhou';['prancha1','prancha2','prancha3','prancha4'].forEach(k=>STU.canv[k]&&drawPanel(k,b,STU.canv[k]).catch(()=>{}));toast(c==='bad_key'?'Chave recusada':c==='no_pollen'?'Sem Pollen na conta':'As pranchas não vieram',c==='no_pollen'?'O saldo gratuito da Pollinations acabou por hoje. As missões da conta liberam mais.':'Gere de novo daqui a pouco.');}}):null;
   await Promise.all([boardJob,...jobs.map(([k,kind,n])=>loadPhotos(b,kind,n,async()=>{got++;show();if(STU.brand===b&&STU.canv[k]){try{await drawPanel(k,b,STU.canv[k]);}catch(e){}}}).then(rs=>{failed+=rs.filter(r=>r.status==='rejected').length;show();}))]);
   if(failed&&STU.brand===b)toast('Algumas fotos não vieram','O serviço gratuito está cheio. Abra o projeto de novo daqui a pouco para completar.');}
@@ -677,7 +677,7 @@ async function generate(refine){if(STU.busy)return;readForm();const inp=STU.inp;
       finally{clearInterval(tick);}}
     if(sm&&brand&&!brand.engine)brand.engine='Claude';
     if(!brand){if(refine&&STU.brand){toast('Ajuste precisa da IA','Sem a IA, só dá para gerar uma versão base nova.');}brand=localBrand(inp);}
-    brand.apps=[...inp.apps];brand.user={...inp.imgs};if(getKey()&&await freeAIReachable())brand.prancha=true;STU.brand=brand;await renderBoard();
+    brand.apps=[...inp.apps];brand.user={...inp.imgs};if(hasGen()&&await freeAIReachable())brand.prancha=true;STU.brand=brand;await renderBoard();
     const thumb=STU.canv.capa?makeCanvas(300,145,g=>g.drawImage(STU.canv.capa,0,0,300,145)).toDataURL('image/jpeg',.7):'';STU.gens.unshift({brand,inputs:JSON.parse(JSON.stringify(inp)),at:Date.now(),thumb});STU.gens=STU.gens.slice(0,4);renderGens();
     await saveProject();buzz([8,30,8]);if(refine)$('#fRefine').value='';if(innerWidth<760)$('#stBoard').scrollIntoView({behavior:REDUCED?'auto':'smooth'});}
   finally{STU.busy=false;btn.disabled=false;$('#stProg').hidden=true;if(!STU.brand)$('#stEmpty').hidden=false;}}
@@ -686,8 +686,8 @@ $('#stRefine').addEventListener('submit',e=>{e.preventDefault();const t=$('#fRef
 $('#stStop').onclick=()=>{if(STU.ctl)STU.ctl.abort();};
 /* qual IA o estúdio está usando, e a chave opcional da Pollinations */
 async function showEngine(){const el=$('#fEngine');const sm=await getSample();if(sm){el.textContent='IA: Claude, pelo claude.ai.';return;}
-  const ok=await freeAIReachable();const k=getKey();$('#fConnect').hidden=!ok||!!k||!canConnect();$('#fDisconnect').hidden=!k;
-  el.textContent=ok?(k?'IA: Pollinations conectada. Marca, fotos e as 4 pranchas com o seu logo.':'IA: gratuita, Pollinations sem cadastro. Texto, símbolo e fotos do mundo da marca.'):'IA: offline. O estúdio gera a versão base no próprio navegador.';}
+  const ok=await freeAIReachable();const k=getKey();$('#fConnect').hidden=!ok||!!k||hasGen()||!canConnect();$('#fDisconnect').hidden=!k;
+  el.textContent=ok?(k?'IA: Pollinations conectada. Marca, fotos e as 4 pranchas com o seu logo.':hasGen()?'IA: liberada pelo BUKKU, sem cadastro. Marca, fotos e as 4 pranchas com o seu logo.':'IA: gratuita, Pollinations sem cadastro. Texto, símbolo e fotos do mundo da marca.'):'IA: offline. O estúdio gera a versão base no próprio navegador.';}
 $('#fConnect').onclick=()=>connectPollinations().catch(()=>toast('Não deu para abrir a Pollinations','Tente de novo ou cole uma chave abaixo.'));
 $('#fDisconnect').onclick=()=>{disconnect();$('#fKey').value='';toast('Pollinations desconectada','O estúdio volta para a IA gratuita sem cadastro.');showEngine();};
 finishConnect().then(ok=>{if(ok){toast('Pollinations conectada','Abra um caderno e gere a marca: agora saem também as 4 pranchas.');showEngine();}}).catch(()=>toast('A conexão não terminou','Tente conectar de novo.'));
