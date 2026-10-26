@@ -258,7 +258,7 @@ function aiBoard(id, prompt, refDataURL, { quality = 'default', size = '1536x102
             if (!r.ok) { last = Object.assign(new Error('http ' + r.status), { code: r.status === 402 ? 'no_pollen' : 'http' }); break; }
             const j = await r.json();
             const d = j?.data?.[0];
-            const src = d?.b64_json ? 'data:image/png;base64,' + d.b64_json : d?.url;
+            const src = d?.b64_json ? 'data:image/' + (d.b64_json.startsWith('/9j/') ? 'jpeg' : 'png') + ';base64,' + d.b64_json : d?.url;
             if (!src) { last = Object.assign(new Error('vazio'), { code: 'http' }); break; }
             const img = await new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
             boards.set(id, img);
