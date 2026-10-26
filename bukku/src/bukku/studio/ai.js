@@ -20,6 +20,8 @@ let proxyOff = false; // a ponte avisou que este visitante usou a cota do dia
 const route = () => { const k = getKey(); return k ? { base: GEN, headers: auth(k) } : PROXY && !proxyOff ? { base: PROXY.replace(/\/$/, ''), headers: {} } : null; };
 /** true quando há modelos melhores disponíveis (chave própria ou ponte). */
 const hasGen = () => !!route();
+/** Ponte fora do ar ou sem chave configurada: desliga e segue com a IA gratuita. */
+const proxyFailed = (r) => !getKey() && PROXY && !proxyOff && (r.status === 403 || r.status >= 500) && (proxyOff = true);
 // modelos por qualidade; a lista cai para o próximo se um não responder
 const TEXT_MODELS = {
   quick: ['openai', 'openai-fast'],
@@ -147,7 +149,7 @@ async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
           }),
         });
         const ra = await retryAfter(r);
-        if (ra < 0) return textJSON(prompt, { quality, signal, onPhase });
+        if (ra < 0 || proxyFailed(r)) return textJSON(prompt, { quality, signal, onPhase });
         if (ra) { last = Object.assign(new Error('rate'), { code: 'rate_limited' }); onPhase?.(model, ra); await wait(ra, signal); continue; }
         if (r.status === 401 || r.status === 403) { last = Object.assign(new Error('key'), { code: 'bad_key' }); break; }
         if (!r.ok) { last = Object.assign(new Error('http ' + r.status), { code: 'http' }); break; }
@@ -157,6 +159,7 @@ async function textJSON(prompt, { quality = 'default', signal, onPhase } = {}) {
         last = Object.assign(new Error('json'), { code: 'invalid_json' });
       } catch (e) {
         if (signal?.aborted) throw abortErr();
+        if (gen && !getKey() && !proxyOff) { proxyOff = true; return textJSON(prompt, { quality, signal, onPhase }); }
         last = Object.assign(e instanceof Error ? e : new Error(String(e)), { code: e?.code || 'network' });
       } finally { t.done(); }
     }
@@ -204,7 +207,7 @@ function aiImage(prompt, opts = {}) {
         try {
           const r = await fetch(url, { headers: route()?.headers || {}, signal: t.signal });
           const ra = await retryAfter(r);
-          if (ra < 0) { memo.delete(url); release(); released = true; return aiImage(prompt, opts); }
+          if (ra < 0 || proxyFailed(r)) { memo.delete(url); release(); released = true; return aiImage(prompt, opts); }
           if (ra || r.status >= 500) { await wait(ra || 5000 * (attempt + 1), opts.signal); continue; }
           if (!r.ok) throw Object.assign(new Error('http ' + r.status), { code: 'http' });
           const blob = await r.blob();
@@ -249,7 +252,7 @@ function aiBoard(id, prompt, refDataURL, { quality = 'default', size = '1536x102
               body: JSON.stringify({ model, prompt, image: [{ image_url: refDataURL }], size, quality: BOARD_Q[quality] || 'medium', seed, response_format: 'b64_json' }),
             });
             const ra = await retryAfter(r);
-            if (ra < 0) throw Object.assign(new Error('cota'), { code: 'no_pollen' });
+            if (ra < 0 || proxyFailed(r)) throw Object.assign(new Error('cota'), { code: 'no_pollen' });
             if (ra || r.status >= 500) { await wait(ra || 6000 * (attempt + 1), signal); continue; }
             if (r.status === 401 || r.status === 403) throw Object.assign(new Error('key'), { code: 'bad_key' });
             if (!r.ok) { last = Object.assign(new Error('http ' + r.status), { code: r.status === 402 ? 'no_pollen' : 'http' }); break; }
