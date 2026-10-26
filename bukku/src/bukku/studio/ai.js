@@ -14,7 +14,7 @@ const GEN = 'https://gen.pollinations.ai';
 /* Ponte do BUKKU (bukku/proxy/worker.js): um Cloudflare Worker que guarda a
  * chave do dono, para que qualquer visitante use os modelos melhores sem entrar
  * com conta. Vazio = sem ponte. A chave da própria pessoa, se houver, vem antes. */
-const PROXY = '';
+const PROXY = 'https://bukku-ponte.kainan0206jaderson.workers.dev';
 /** Para onde vão os pedidos com chave: a conta da pessoa ou a ponte. */
 let proxyOff = false; // a ponte avisou que este visitante usou a cota do dia
 const route = () => { const k = getKey(); return k ? { base: GEN, headers: auth(k) } : PROXY && !proxyOff ? { base: PROXY.replace(/\/$/, ''), headers: {} } : null; };
