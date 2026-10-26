@@ -28,10 +28,10 @@ function getKey() {
  * A pessoa entra com a conta dela e autoriza o BUKKU a gastar o Pollen gratuito
  * dela; a chave volta para esta aba e fica só no sessionStorage, como pede a
  * documentação. APP_KEY é a chave publicável do app (pk_), criada em
- * enter.pollinations.ai > Apps, com o endereço do BUKKU como Redirect URI.
+ * enter.pollinations.ai > Keys (Publishable), com o endereço do BUKKU como Redirect URI.
  * O fluxo exige essa chave: enquanto ela estiver vazia, o botão fica escondido e
  * a pessoa ainda pode colar uma chave sk_ na ficha. */
-const APP_KEY = '';
+const APP_KEY = 'pk_YfVvT4gDP0bwvrEe';
 const canConnect = () => !!APP_KEY;
 const KEY_SS = 'bukku.pollen.session';
 const AUTH = 'https://enter.pollinations.ai/authorize';
