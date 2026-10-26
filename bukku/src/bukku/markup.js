@@ -131,6 +131,8 @@ const markup = String.raw`<canvas id="gl" tabindex="0" aria-label="Escritório d
           <div class="sl"><span>contido</span><input type="range" id="s_sat" min="0" max="100" value="50" aria-label="Contido ou saturado"><span>saturado</span></div>
           <div class="sl"><span>orgânico</span><input type="range" id="s_geo" min="0" max="100" value="50" aria-label="Orgânico ou geométrico"><span>geométrico</span></div>
           <div class="sl"><span>sério</span><input type="range" id="s_fun" min="0" max="100" value="50" aria-label="Sério ou divertido"><span>divertido</span></div>
+          <div class="sl"><span>plano</span><input type="range" id="s_tex" min="0" max="100" value="50" aria-label="Plano ou texturizado"><span>texturizado</span></div>
+          <div class="sl"><span>estático</span><input type="range" id="s_mov" min="0" max="100" value="50" aria-label="Estático ou dinâmico"><span>dinâmico</span></div>
           <div class="row"><button type="button" class="mini" id="sStyle">↻ me surpreenda</button></div>
         </fieldset>
         <fieldset class="card">
@@ -145,13 +147,18 @@ const markup = String.raw`<canvas id="gl" tabindex="0" aria-label="Escritório d
             <button type="button" data-q="default" class="on">Equilibrada<small>~1 min</small></button>
             <button type="button" data-q="complex">Alta<small>~2 min</small></button>
           </div>
+          <p class="note" id="fEngine">IA: verificando…</p>
+          <details class="keybox"><summary>chave gratuita da Pollinations (opcional)</summary>
+            <p class="note">Sem chave a IA gratuita já funciona. Com uma chave grátis de <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">enter.pollinations.ai</a> você ganha modelos melhores e fotos mais rápidas. Ela fica só neste navegador.</p>
+            <div class="row"><input id="fKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk_… ou pk_…" aria-label="Chave da Pollinations"><button type="button" class="mini" id="fKeySave">salvar</button></div>
+          </details>
         </fieldset>
         <button class="pill gen" id="stGen" type="submit">Gerar marca →</button>
       </form>
       <div class="st-board" id="stBoard">
         <div class="empty" id="stEmpty"><span class="k">pronto.</span><b>Preencha a ficha e gere o primeiro kit da sua marca.</b><small>Você recebe as páginas de identidade, e elas viram o brand book no caderno.</small></div>
         <div class="prog" id="stProg" hidden><b id="stProgT">pensando</b><span class="dots"><i></i><i></i><i></i></span><button type="button" class="mini" id="stStop">parar</button></div>
-        <div class="kit-h" id="stKitH" hidden><b id="stKitT">kit</b><span id="stKitS"></span></div>
+        <div class="kit-h" id="stKitH" hidden><b id="stKitT">kit</b><span id="stKitS"></span><span class="kitw" id="stKitW" hidden></span></div>
         <div class="kit" id="stGrid"></div>
         <form class="refine" id="stRefine" hidden><input id="fRefine" name="refine" maxlength="200" autocomplete="off" placeholder="Ajustar: mais editorial, troque só a paleta…" aria-label="Pedido de ajuste"><button class="pill sm" type="submit">Ajustar</button></form>
         <div class="gens" id="stGens" aria-label="Gerações anteriores"></div>
